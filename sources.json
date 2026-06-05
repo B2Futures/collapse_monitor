@@ -1,0 +1,724 @@
+{
+  "global": [
+    {
+      "id": "reuters",
+      "name": "Reuters",
+      "domain": "reuters.com",
+      "flag": "[G]",
+      "category": "global"
+    },
+    {
+      "id": "apnews",
+      "name": "AP News",
+      "domain": "apnews.com",
+      "flag": "[G]",
+      "category": "global"
+    },
+    {
+      "id": "afp",
+      "name": "AFP",
+      "domain": "afp.com",
+      "flag": "[G]",
+      "category": "global"
+    },
+    {
+      "id": "bbc",
+      "name": "BBC News",
+      "domain": "bbc.com",
+      "flag": "[UK]",
+      "category": "global"
+    },
+    {
+      "id": "aljazeera",
+      "name": "Al Jazeera",
+      "domain": "aljazeera.com",
+      "flag": "[QA]",
+      "category": "global"
+    },
+    {
+      "id": "guardian",
+      "name": "The Guardian",
+      "domain": "theguardian.com",
+      "flag": "[UK]",
+      "category": "global"
+    },
+    {
+      "id": "dw",
+      "name": "Deutsche Welle",
+      "domain": "dw.com",
+      "flag": "[DE]",
+      "category": "global"
+    },
+    {
+      "id": "france24",
+      "name": "France 24",
+      "domain": "france24.com",
+      "flag": "[FR]",
+      "category": "global"
+    },
+    {
+      "id": "scmp",
+      "name": "S.China Morning",
+      "domain": "scmp.com",
+      "flag": "[HK]",
+      "category": "global"
+    },
+    {
+      "id": "euronews",
+      "name": "Euronews",
+      "domain": "euronews.com",
+      "flag": "[EU]",
+      "category": "global"
+    },
+    {
+      "id": "toi",
+      "name": "Times of India",
+      "domain": "timesofindia.com",
+      "flag": "[IN]",
+      "category": "global"
+    },
+    {
+      "id": "mercopress",
+      "name": "MercoPress",
+      "domain": "en.mercopress.com",
+      "flag": "[SA]",
+      "category": "global"
+    },
+    {
+      "id": "infobae",
+      "name": "Infobae",
+      "domain": "infobae.com",
+      "flag": "[AR]",
+      "category": "global"
+    },
+    {
+      "id": "folha",
+      "name": "Folha de S.Paulo",
+      "domain": "folha.uol.com.br",
+      "flag": "[BR]",
+      "category": "global"
+    },
+    {
+      "id": "odia",
+      "name": "O Globo (EN)",
+      "domain": "oglobo.globo.com",
+      "flag": "[BR]",
+      "category": "global"
+    },
+    {
+      "id": "elpais_am",
+      "name": "El País América",
+      "domain": "elpais.com",
+      "flag": "[SA]",
+      "category": "global"
+    },
+    {
+      "id": "larepublica",
+      "name": "La República",
+      "domain": "larepublica.pe",
+      "flag": "[PE]",
+      "category": "global"
+    },
+    {
+      "id": "riotime",
+      "name": "Rio Times",
+      "domain": "riotimesonline.com",
+      "flag": "[BR]",
+      "category": "global"
+    },
+    {
+      "id": "allafrica",
+      "name": "AllAfrica",
+      "domain": "allafrica.com",
+      "flag": "[AF]",
+      "category": "global"
+    },
+    {
+      "id": "dailynation",
+      "name": "Daily Nation",
+      "domain": "nation.africa",
+      "flag": "[KE]",
+      "category": "global"
+    },
+    {
+      "id": "guardian_ng",
+      "name": "Guardian Nigeria",
+      "domain": "guardian.ng",
+      "flag": "[NG]",
+      "category": "global"
+    },
+    {
+      "id": "mg",
+      "name": "Mail & Guardian",
+      "domain": "mg.co.za",
+      "flag": "[ZA]",
+      "category": "global"
+    },
+    {
+      "id": "dailymaverick",
+      "name": "Daily Maverick",
+      "domain": "dailymaverick.co.za",
+      "flag": "[ZA]",
+      "category": "global"
+    },
+    {
+      "id": "theeastafrican",
+      "name": "East African",
+      "domain": "theeastafrican.co.ke",
+      "flag": "[EA]",
+      "category": "global"
+    },
+    {
+      "id": "africareport",
+      "name": "Africa Report",
+      "domain": "theafricareport.com",
+      "flag": "[AF]",
+      "category": "global"
+    },
+    {
+      "id": "moscowtimes",
+      "name": "Moscow Times",
+      "domain": "themoscowtimes.com",
+      "flag": "[RU]",
+      "category": "global"
+    },
+    {
+      "id": "rteng",
+      "name": "RT (EN)",
+      "domain": "rt.com",
+      "flag": "[RU]",
+      "category": "global"
+    },
+    {
+      "id": "kyivpost",
+      "name": "Kyiv Post",
+      "domain": "kyivpost.com",
+      "flag": "[UA]",
+      "category": "global"
+    },
+    {
+      "id": "meduza",
+      "name": "Meduza",
+      "domain": "meduza.io",
+      "flag": "[RU]",
+      "category": "global"
+    },
+    {
+      "id": "arctictoday",
+      "name": "Arctic Today",
+      "domain": "arctictoday.com",
+      "flag": "[ARC]",
+      "category": "global"
+    },
+    {
+      "id": "highnorthnews",
+      "name": "High North News",
+      "domain": "highnorthnews.com",
+      "flag": "[ARC]",
+      "category": "global"
+    },
+    {
+      "id": "mongabay",
+      "name": "Mongabay",
+      "domain": "mongabay.com",
+      "flag": "[ENV]",
+      "category": "global"
+    },
+    {
+      "id": "carbonbrief",
+      "name": "Carbon Brief",
+      "domain": "carbonbrief.org",
+      "flag": "[ENV]",
+      "category": "global"
+    },
+    {
+      "id": "insideclimate",
+      "name": "Inside Climate",
+      "domain": "insideclimatenews.org",
+      "flag": "[ENV]",
+      "category": "global"
+    }
+  ],
+  "journals": [
+    {
+      "id": "nature",
+      "name": "Nature",
+      "domain": "nature.com",
+      "category": "journal"
+    },
+    {
+      "id": "science",
+      "name": "Science",
+      "domain": "science.org",
+      "category": "journal"
+    },
+    {
+      "id": "lancet",
+      "name": "The Lancet",
+      "domain": "thelancet.com",
+      "category": "journal"
+    },
+    {
+      "id": "nejm",
+      "name": "NEJM",
+      "domain": "nejm.org",
+      "category": "journal"
+    },
+    {
+      "id": "pnas",
+      "name": "PNAS",
+      "domain": "pnas.org",
+      "category": "journal"
+    }
+  ],
+  "local": {
+    "us": {
+      "label": "United States",
+      "flag": "US",
+      "sources": [
+        {
+          "id": "nyt",
+          "name": "NY Times",
+          "domain": "nytimes.com"
+        },
+        {
+          "id": "wapo",
+          "name": "Washington Post",
+          "domain": "washingtonpost.com"
+        },
+        {
+          "id": "wsj",
+          "name": "Wall St Journal",
+          "domain": "wsj.com"
+        },
+        {
+          "id": "cnn",
+          "name": "CNN",
+          "domain": "cnn.com"
+        },
+        {
+          "id": "npr",
+          "name": "NPR",
+          "domain": "npr.org"
+        },
+        {
+          "id": "usatoday",
+          "name": "USA Today",
+          "domain": "usatoday.com"
+        },
+        {
+          "id": "bloomberg",
+          "name": "Bloomberg",
+          "domain": "bloomberg.com"
+        },
+        {
+          "id": "axios",
+          "name": "Axios",
+          "domain": "axios.com"
+        },
+        {
+          "id": "politico",
+          "name": "Politico",
+          "domain": "politico.com"
+        },
+        {
+          "id": "thehill",
+          "name": "The Hill",
+          "domain": "thehill.com"
+        }
+      ]
+    },
+    "uk": {
+      "label": "United Kingdom",
+      "flag": "UK",
+      "sources": [
+        {
+          "id": "guardian_uk",
+          "name": "The Guardian",
+          "domain": "theguardian.com"
+        },
+        {
+          "id": "bbc_uk",
+          "name": "BBC News",
+          "domain": "bbc.co.uk"
+        },
+        {
+          "id": "times_uk",
+          "name": "The Times",
+          "domain": "thetimes.co.uk"
+        },
+        {
+          "id": "telegraph",
+          "name": "The Telegraph",
+          "domain": "telegraph.co.uk"
+        },
+        {
+          "id": "independent",
+          "name": "Independent",
+          "domain": "independent.co.uk"
+        },
+        {
+          "id": "ft",
+          "name": "Financial Times",
+          "domain": "ft.com"
+        },
+        {
+          "id": "mirror",
+          "name": "The Mirror",
+          "domain": "mirror.co.uk"
+        },
+        {
+          "id": "express",
+          "name": "Daily Express",
+          "domain": "express.co.uk"
+        },
+        {
+          "id": "skynews",
+          "name": "Sky News",
+          "domain": "news.sky.com"
+        },
+        {
+          "id": "channel4",
+          "name": "Channel 4",
+          "domain": "channel4.com"
+        }
+      ]
+    },
+    "ca": {
+      "label": "Canada",
+      "flag": "CA",
+      "sources": [
+        {
+          "id": "cbc",
+          "name": "CBC News",
+          "domain": "cbc.ca"
+        },
+        {
+          "id": "globe",
+          "name": "Globe and Mail",
+          "domain": "theglobeandmail.com"
+        },
+        {
+          "id": "natpost",
+          "name": "National Post",
+          "domain": "nationalpost.com"
+        },
+        {
+          "id": "torontostar",
+          "name": "Toronto Star",
+          "domain": "thestar.com"
+        },
+        {
+          "id": "ctv",
+          "name": "CTV News",
+          "domain": "ctvnews.ca"
+        },
+        {
+          "id": "globalnews",
+          "name": "Global News",
+          "domain": "globalnews.ca"
+        },
+        {
+          "id": "macleans",
+          "name": "Maclean's",
+          "domain": "macleans.ca"
+        },
+        {
+          "id": "ottcit",
+          "name": "Ottawa Citizen",
+          "domain": "ottawacitizen.com"
+        },
+        {
+          "id": "ledevoir",
+          "name": "Le Devoir",
+          "domain": "ledevoir.com"
+        },
+        {
+          "id": "lapresse",
+          "name": "La Presse",
+          "domain": "lapresse.ca"
+        }
+      ]
+    },
+    "au": {
+      "label": "Australia",
+      "flag": "AU",
+      "sources": [
+        {
+          "id": "abc_au",
+          "name": "ABC News AU",
+          "domain": "abc.net.au"
+        },
+        {
+          "id": "smh",
+          "name": "Sydney Morning",
+          "domain": "smh.com.au"
+        },
+        {
+          "id": "theage",
+          "name": "The Age",
+          "domain": "theage.com.au"
+        },
+        {
+          "id": "theaust",
+          "name": "The Australian",
+          "domain": "theaustralian.com.au"
+        },
+        {
+          "id": "sbs",
+          "name": "SBS News",
+          "domain": "sbs.com.au"
+        },
+        {
+          "id": "afr",
+          "name": "Fin. Review",
+          "domain": "afr.com"
+        },
+        {
+          "id": "news_au",
+          "name": "News.com.au",
+          "domain": "news.com.au"
+        },
+        {
+          "id": "dailytele",
+          "name": "Daily Telegraph",
+          "domain": "dailytelegraph.com.au"
+        },
+        {
+          "id": "heraldsun",
+          "name": "Herald Sun",
+          "domain": "heraldsun.com.au"
+        },
+        {
+          "id": "gau",
+          "name": "Guardian AU",
+          "domain": "theguardian.com/au"
+        }
+      ]
+    },
+    "de": {
+      "label": "Germany",
+      "flag": "DE",
+      "sources": [
+        {
+          "id": "spiegel",
+          "name": "Der Spiegel",
+          "domain": "spiegel.de"
+        },
+        {
+          "id": "zeit",
+          "name": "Die Zeit",
+          "domain": "zeit.de"
+        },
+        {
+          "id": "faz",
+          "name": "FAZ",
+          "domain": "faz.net"
+        },
+        {
+          "id": "sueddeutsche",
+          "name": "Sueddeutsche",
+          "domain": "sueddeutsche.de"
+        },
+        {
+          "id": "handelsblatt",
+          "name": "Handelsblatt",
+          "domain": "handelsblatt.com"
+        },
+        {
+          "id": "tagesspiegel",
+          "name": "Tagesspiegel",
+          "domain": "tagesspiegel.de"
+        },
+        {
+          "id": "welt",
+          "name": "Die Welt",
+          "domain": "welt.de"
+        },
+        {
+          "id": "ard",
+          "name": "ARD Tagesschau",
+          "domain": "tagesschau.de"
+        },
+        {
+          "id": "zdf",
+          "name": "ZDF heute",
+          "domain": "zdf.de"
+        },
+        {
+          "id": "dw_de",
+          "name": "Deutsche Welle",
+          "domain": "dw.com"
+        }
+      ]
+    },
+    "fr": {
+      "label": "France",
+      "flag": "FR",
+      "sources": [
+        {
+          "id": "lemonde",
+          "name": "Le Monde",
+          "domain": "lemonde.fr"
+        },
+        {
+          "id": "lefigaro",
+          "name": "Le Figaro",
+          "domain": "lefigaro.fr"
+        },
+        {
+          "id": "liberation",
+          "name": "Liberation",
+          "domain": "liberation.fr"
+        },
+        {
+          "id": "leparisien",
+          "name": "Le Parisien",
+          "domain": "leparisien.fr"
+        },
+        {
+          "id": "fr24",
+          "name": "France 24",
+          "domain": "france24.com"
+        },
+        {
+          "id": "rfi",
+          "name": "RFI",
+          "domain": "rfi.fr"
+        },
+        {
+          "id": "bfmtv",
+          "name": "BFM TV",
+          "domain": "bfmtv.com"
+        },
+        {
+          "id": "nouvelobs",
+          "name": "Le Nouvel Obs",
+          "domain": "nouvelobs.com"
+        },
+        {
+          "id": "lexpress",
+          "name": "L'Express",
+          "domain": "lexpress.fr"
+        },
+        {
+          "id": "humanite",
+          "name": "L'Humanite",
+          "domain": "humanite.fr"
+        }
+      ]
+    },
+    "in": {
+      "label": "India",
+      "flag": "IN",
+      "sources": [
+        {
+          "id": "toi_in",
+          "name": "Times of India",
+          "domain": "timesofindia.com"
+        },
+        {
+          "id": "hindu",
+          "name": "The Hindu",
+          "domain": "thehindu.com"
+        },
+        {
+          "id": "hindustan",
+          "name": "Hindustan Times",
+          "domain": "hindustantimes.com"
+        },
+        {
+          "id": "ndtv",
+          "name": "NDTV",
+          "domain": "ndtv.com"
+        },
+        {
+          "id": "indtoday",
+          "name": "India Today",
+          "domain": "indiatoday.in"
+        },
+        {
+          "id": "wire",
+          "name": "The Wire",
+          "domain": "thewire.in"
+        },
+        {
+          "id": "scroll",
+          "name": "Scroll.in",
+          "domain": "scroll.in"
+        },
+        {
+          "id": "mint",
+          "name": "Mint",
+          "domain": "livemint.com"
+        },
+        {
+          "id": "theprint",
+          "name": "The Print",
+          "domain": "theprint.in"
+        },
+        {
+          "id": "outlook",
+          "name": "Outlook India",
+          "domain": "outlookindia.com"
+        }
+      ]
+    },
+    "jp": {
+      "label": "Japan",
+      "flag": "JP",
+      "sources": [
+        {
+          "id": "nhk",
+          "name": "NHK World",
+          "domain": "nhk.or.jp"
+        },
+        {
+          "id": "japantimes",
+          "name": "Japan Times",
+          "domain": "japantimes.co.jp"
+        },
+        {
+          "id": "yomiuri",
+          "name": "Yomiuri Shimbun",
+          "domain": "yomiuri.co.jp"
+        },
+        {
+          "id": "asahi",
+          "name": "Asahi Shimbun",
+          "domain": "asahi.com"
+        },
+        {
+          "id": "mainichi",
+          "name": "Mainichi",
+          "domain": "mainichi.jp"
+        },
+        {
+          "id": "nikkei",
+          "name": "Nikkei Asia",
+          "domain": "asia.nikkei.com"
+        },
+        {
+          "id": "kyodo",
+          "name": "Kyodo News",
+          "domain": "english.kyodonews.net"
+        },
+        {
+          "id": "toyokeizai",
+          "name": "Toyo Keizai",
+          "domain": "toyokeizai.net"
+        },
+        {
+          "id": "jiji",
+          "name": "Jiji Press",
+          "domain": "jiji.com"
+        },
+        {
+          "id": "sankei",
+          "name": "Sankei Shimbun",
+          "domain": "sankei.com"
+        }
+      ]
+    }
+  }
+}
