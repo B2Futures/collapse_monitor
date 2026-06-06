@@ -2098,7 +2098,7 @@ function App() {
         h('div',{className:'scard',style:{'--accent':sc}},
           h('div',{className:'slbl'},'Overall Signal'),
           h('div',{className:'sval',style:{fontSize:'16px',marginTop:'12px',fontFamily:'var(--h)',letterSpacing:'1px',color:sc}},
-            trend ? trend.overallSignal.toUpperCase() : (lastRun?'-':'NO DATA')),
+            trend && trend.overallSignal ? trend.overallSignal.toUpperCase() : (lastRun?'-':'NO DATA')),
           h('div',{className:'ssub'},trend?'from pattern analysis':'run analysis'))),
       h('div',{className:'g2'},
         h('div',null,
