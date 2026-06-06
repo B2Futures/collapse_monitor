@@ -1368,13 +1368,17 @@ var EXAMPLE_QS = [
 function MiniBarChart(props) {
   var data = props.data || [];
   var max = Math.max.apply(null, data.map(function(d){return d.count;}).concat([1]));
-  var barH = 18, gap = 4, svgH = data.length * (barH + gap);
+  var barH = 16, gap = 5, labelW = 140, barMax = 120;
+  var svgH = data.length * (barH + gap);
   return h('svg', {width:'100%', height:svgH, style:{overflow:'visible'}},
     data.map(function(d, i) {
-      var y = i*(barH+gap), w = Math.max(4,(d.count/max)*160);
-      return h('g', {key:d.name},
-        h('text', {x:72,y:y+barH-4, style:{fontSize:'10px',fill:'#546e7a',textAnchor:'end',fontFamily:'IBM Plex Mono'}}, d.name),
-        h('rect', {x:76,y:y,width:w,height:barH,rx:2,fill:d.color,opacity:0.8}),
+      var y = i*(barH+gap), w = d.count>0 ? Math.max(4,(d.count/max)*barMax) : 0;
+      var lbl = d.label || d.name || '';
+      return h('g', {key:d.id||d.name},
+        h('text', {x:labelW-4,y:y+barH-4,
+          style:{fontSize:'10px',fill:d.count>0?'var(--text)':'#546e7a',
+            textAnchor:'end',fontFamily:'IBM Plex Mono',fontWeight:d.count>0?'600':'400'}}, lbl),
+        h('rect', {x:labelW,y:y,width:w,height:barH,rx:2,fill:d.color,opacity:0.8}),
         h('text', {x:76+w+5,y:y+barH-4, style:{fontSize:'10px',fill:'#546e7a',fontFamily:'IBM Plex Mono'}}, d.count)
       );
     })
@@ -1403,7 +1407,7 @@ var THRESHOLD_DEFS = [
    threshold:'1.5°C above pre-industrial (Paris Agreement limit); 2°C critical boundary',
    why:'Even 0.5°C difference triggers disproportionate impacts — more frequent extreme heat, stronger storms, accelerated ice loss, and ecosystem collapse. Beyond 2°C feedback loops may become self-sustaining.'},
   {id:'ghg',           label:'Greenhouse Gas Levels',
-   threshold:'CO₂: 350 ppm safe; currently ~425 ppm. Net-zero by 2050 needed to hold 1.5°C',
+   threshold:'CO₂ safe boundary: 350 ppm (pre-industrial ~280 ppm). Net-zero by 2050 needed to hold 1.5°C',
    why:'CO₂ persists for centuries. Every year of overshoot increases warming locked in regardless of future reductions. Methane and N₂O add significant additional forcing.'},
   {id:'sea_level',     label:'Sea Level Rise',
    threshold:'1.5m by 2100 (moderate scenario); 3m+ if ice sheets destabilize',
@@ -2279,25 +2283,7 @@ function App() {
         // ── LEFT: National ──────────────────────────────────────────────────
         h('div',null,
           h('div',{className:'slabel'},'National / Global'),
-          h('div',{style:{display:'flex',gap:'8px',marginBottom:'12px'}},
-            h('div',{className:'scard',style:{'--accent':'#00d4ff',flex:1,minHeight:0,padding:'10px 12px'}},
-              h('div',{className:'slbl'},'Articles'),
-              h('div',{className:'sval'},arts.length),
-              h('div',{className:'ssub'},'national archive')),
-            h('div',{className:'scard',style:{'--accent':sc,flex:1,minHeight:0,padding:'10px 12px'}},
-              h('div',{className:'slbl'},'Global Signal'),
-              h('div',{className:'sval',style:{fontSize:'13px',marginTop:'6px',fontFamily:'var(--h)',letterSpacing:'1px',color:sc}},
-                trend&&trend.overallSignal ? trend.overallSignal.toUpperCase() : '-'),
-              h('div',{className:'ssub'},'from patterns')),
-            (function(){
-              var nsc=SIGCOL[localMon&&localMon.overallSignal]||'#546e7a';
-              return h('div',{className:'scard',style:{'--accent':nsc,flex:1,minHeight:0,padding:'10px 12px'}},
-                h('div',{className:'slbl'},'National Signal'),
-                h('div',{className:'sval',style:{fontSize:'13px',marginTop:'6px',fontFamily:'var(--h)',letterSpacing:'1px',color:nsc}},
-                  localMon&&localMon.overallSignal ? localMon.overallSignal.toUpperCase() : '-'),
-                h('div',{className:'ssub'},localMon&&localMon.country?localMon.country:'run national'));
-            })()),
-          h('div',{className:'slabel'},'Articles by Topic'),
+                    h('div',{className:'slabel'},'Articles by Topic'),
           h('div',{className:'card mb12',style:{minHeight:'160px'}},
             arts.length>0
               ? h(MiniBarChart,{data:chartData})
@@ -2463,48 +2449,26 @@ function App() {
 
       h('div',{className:'g2'},
         h('div',null,
-          h('div',{className:'card'},
-        filtered.length===0
-          ? h('div',{style:{padding:'20px',textAlign:'center',fontSize:'12px',color:'var(--muted)'}},'No keywords match the current filter.')
-          : h('table',{style:{width:'100%',borderCollapse:'collapse'}},
-              h('thead',null,
-                h('tr',null,
-                  h('th',{style:{textAlign:'left',fontFamily:'var(--m)',fontSize:'10px',color:'var(--muted)',letterSpacing:'1px',padding:'0 0 8px 0',borderBottom:'1px solid var(--border)'}},'KEYWORD'),
-                  h('th',{style:{textAlign:'left',fontFamily:'var(--m)',fontSize:'10px',color:'var(--muted)',letterSpacing:'1px',padding:'0 0 8px 12px',borderBottom:'1px solid var(--border)',width:'180px'}},'TOPIC'),
-                  h('th',{style:{borderBottom:'1px solid var(--border)',width:'80px'}}))),
-              h('tbody',null,
-                filtered.map(function(e) {
-                  var actualIdx = kws.indexOf(e);
-                  var tp = TOPICS.find(function(t){return t.id===e.topicId;});
-                  var isEditing = kwEditIdx===actualIdx;
-                  return h('tr',{key:actualIdx,style:{borderBottom:'1px solid var(--s3)'}},
-                    h('td',{style:{padding:'7px 0'}},
-                      isEditing
-                        ? h('input',{className:'inp',style:{padding:'3px 8px',fontSize:'12px',width:'100%'},
-                            value:kwEditText,
-                            onInput:function(ev){setKwEditText(ev.target.value);},
-                            onKeyDown:function(ev){if(ev.key==='Enter')saveEditAt(actualIdx);if(ev.key==='Escape'){setKwEditIdx(-1);setKwEditText('');}}})
-                        : h('span',{style:{fontSize:'12px',color:'var(--text)',cursor:'pointer',padding:'3px 0',display:'block'},
-                            title:'Click to edit',
-                            onClick:function(){setEditIdx(actualIdx);setEditText(e.kw);}},
-                            e.kw)),
-                    h('td',{style:{padding:'7px 0 7px 12px'}},
-                      isEditing
-                        ? h('button',{className:'btn btn-p btn-sm',style:{fontSize:'10px'},
-                            onClick:function(){saveEditAt(actualIdx);}},'[v] Save')
-                        : h('select',{className:'inp',style:{padding:'3px 6px',fontSize:'11px',width:'160px'},
-                            value:e.topicId,
-                            onChange:function(ev){updateTopicAt(actualIdx,ev.target.value);}},
-                            TOPICS.map(function(t){
-                              return h('option',{key:t.id,value:t.id},t.label);}))),
-                    h('td',{style:{padding:'7px 0',textAlign:'right'}},
-                      isEditing
-                        ? h('button',{className:'btn btn-sm',style:{fontSize:'10px'},
-                            onClick:function(){setEditIdx(-1);setEditText('');}}, '[x] Cancel')
-                        : h('button',{className:'btn btn-sm',
-                            style:{fontSize:'10px',color:'rgba(255,45,74,.8)',borderColor:'rgba(255,45,74,.3)'},
-                            onClick:function(){removeKwAt(actualIdx);}}, '[x]')));
-                })))),
+          h('div',{className:'card mb12'},
+          h('div',{className:'card-h'},'Local Location'),
+          h('div',{style:{fontSize:'12px',color:'var(--muted)',marginBottom:'12px'}},'Used by the Local tab for community news and briefings.'),
+          h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'10px',marginBottom:'8px'}},
+            h('div',null,
+              h('div',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--muted)',marginBottom:'5px',letterSpacing:'1px'}},'CITY'),
+              h('input',{className:'inp',value:localCity,placeholder:'e.g. Milton',
+                onInput:function(e){setLocalCity(e.target.value);},
+                onBlur:function(){saveSrv();}})),
+            h('div',null,
+              h('div',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--muted)',marginBottom:'5px',letterSpacing:'1px'}},'COUNTY'),
+              h('input',{className:'inp',value:localCounty,placeholder:'e.g. Rock',
+                onInput:function(e){setLocalCounty(e.target.value);},
+                onBlur:function(){saveSrv();}})),
+            h('div',null,
+              h('div',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--muted)',marginBottom:'5px',letterSpacing:'1px'}},'STATE / PROVINCE'),
+              h('input',{className:'inp',value:localState,placeholder:'e.g. Wisconsin',
+                onInput:function(e){setLocalState(e.target.value);},
+                onBlur:function(){saveSrv();}}))),
+          h('div',{style:{fontSize:'11px',color:'var(--dim)',fontFamily:'var(--m)'}},'City + State gives the best local search results.')),
           h('div',{className:'card mb12'},
         h('div',{className:'card-h'},'Your Country / Region'),
         h('div',{style:{display:'flex',flexWrap:'wrap',gap:'6px',marginBottom:'14px'}},
@@ -2552,8 +2516,8 @@ function App() {
           h('div',{className:'card'},
           h('div',{className:'card-h'},'Custom Keywords'),
           h('div',{style:{fontSize:'11px',color:'var(--dim)',fontFamily:'var(--m)',marginBottom:'8px'}},
-            'Keywords are assigned to a specific topic and searched during collection. '
-            +'Each topic has a 20-keyword cap — a warning appears if adding yours would exceed it.'),
+            'Keywords are searched during collection. Manage all keywords in the Keywords tab. '
+            +'Each topic has a 20-keyword cap — a warning appears here if the cap is exceeded.'),
           (function(){
             var warnings=[];
             TOPICS.forEach(function(t){
@@ -3177,7 +3141,6 @@ function App() {
                 h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',padding:'2px 7px',borderRadius:'2px',
                   background:sc+'15',border:'1px solid '+sc+'40',color:sc}},a.signal))),
             h('div',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--cyan)',marginBottom:'6px',lineHeight:'1.5'}},def.threshold),
-            hasData&&a.status&&h('div',{style:{fontFamily:'var(--m)',fontSize:'11px',color:'#ffd000',marginBottom:'6px'}},'Now: '+a.status),
             hasData&&h('div',{style:{fontSize:'12px',color:'var(--text)',lineHeight:'1.65',marginBottom:'8px'}},a.blurb),
             h('div',{style:{borderTop:'1px solid var(--border)',paddingTop:'8px',marginTop:'4px'}},
               h('div',{style:{fontFamily:'var(--m)',fontSize:'9px',color:'var(--dim)',marginBottom:'4px',letterSpacing:'1.5px',textTransform:'uppercase'}},'WHY IT MATTERS'),
