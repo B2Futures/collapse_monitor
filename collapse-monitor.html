@@ -1455,6 +1455,31 @@ function App() {
   var _expanded    = useState({});         var expanded = _expanded[0], setExpanded = _expanded[1];
   var _natTopic    = useState('all');      var natTopic = _natTopic[0], setNatTopic = _natTopic[1];
   var _qTopic      = useState('all');      var qTopic = _qTopic[0], setQTopic = _qTopic[1];
+  var _localCity      = useState('');      var localCity = _localCity[0], setLocalCity = _localCity[1];
+  var _localCounty    = useState('');      var localCounty = _localCounty[0], setLocalCounty = _localCounty[1];
+  var _localState     = useState('');      var localState = _localState[0], setLocalState = _localState[1];
+  var _localArts      = useState([]);      var localArts = _localArts[0], setLocalArts = _localArts[1];
+  var _localBriefing  = useState({});      var localBriefing = _localBriefing[0], setLocalBriefing = _localBriefing[1];
+  var _localBriefRef  = useState(false);   var localBriefRefreshing = _localBriefRef[0], setLocalBriefRefreshing = _localBriefRef[1];
+  var _localColl      = useState(false);   var localCollecting = _localColl[0], setLocalCollecting = _localColl[1];
+  var _localCollMsg   = useState('');      var localCollMsg = _localCollMsg[0], setLocalCollMsg = _localCollMsg[1];
+  var _localLastRun   = useState(null);    var localLastRun = _localLastRun[0], setLocalLastRun = _localLastRun[1];
+  var _localLookback  = useState(30);      var localLookback = _localLookback[0], setLocalLookback = _localLookback[1];
+  var _localTopic     = useState('all');   var localTopic = _localTopic[0], setLocalTopic = _localTopic[1];
+  var _localArchiveOpen = useState(false); var localArchiveOpen = _localArchiveOpen[0], setLocalArchiveOpen = _localArchiveOpen[1];
+  var _localArcFilter   = useState('all'); var localArcFilter = _localArcFilter[0], setLocalArcFilter = _localArcFilter[1];
+  var _localArcSearch   = useState('');    var localArcSearch = _localArcSearch[0], setLocalArcSearch = _localArcSearch[1];
+  var _localArcShowDism = useState(false); var localArcShowDism = _localArcShowDism[0], setLocalArcShowDism = _localArcShowDism[1];
+  var _localCity      = useState('');      var localCity = _localCity[0], setLocalCity = _localCity[1];
+  var _localCounty    = useState('');      var localCounty = _localCounty[0], setLocalCounty = _localCounty[1];
+  var _localState     = useState('');      var localState = _localState[0], setLocalState = _localState[1];
+  var _localArts      = useState([]);      var localArts = _localArts[0], setLocalArts = _localArts[1];
+  var _localBriefing  = useState({});      var localBriefing = _localBriefing[0], setLocalBriefing = _localBriefing[1];
+  var _localBriefRefreshing = useState(false); var localBriefRefreshing = _localBriefRefreshing[0], setLocalBriefRefreshing = _localBriefRefreshing[1];
+  var _localCollecting = useState(false);  var localCollecting = _localCollecting[0], setLocalCollecting = _localCollecting[1];
+  var _localCollMsg   = useState('');      var localCollMsg = _localCollMsg[0], setLocalCollMsg = _localCollMsg[1];
+  var _localLastRun   = useState(null);    var localLastRun = _localLastRun[0], setLocalLastRun = _localLastRun[1];
+  var _localLookback  = useState(30);      var localLookback = _localLookback[0], setLocalLookback = _localLookback[1];
 
   var effectiveGSRC = (srcs&&srcs.global)   ? srcs.global   : GSRC;
   var effectiveLSRC = (srcs&&srcs.local)    ? srcs.local    : LSRC;
@@ -1512,6 +1537,14 @@ function App() {
           if (d.settings.activeSources) setActSrc(new Set(d.settings.activeSources));
           if (d.settings.ingestSrc)    setIngestSrc(d.settings.ingestSrc);
           if (d.settings.trend)       setTrend(d.settings.trend);
+          if (d.settings.localCity)    setLocalCity(d.settings.localCity);
+          if (d.settings.localCounty)  setLocalCounty(d.settings.localCounty);
+          if (d.settings.localState)   setLocalState(d.settings.localState);
+          if (d.settings.localLookback) setLocalLookback(d.settings.localLookback);
+          if (d.settings.localCity)    setLocalCity(d.settings.localCity);
+          if (d.settings.localCounty)  setLocalCounty(d.settings.localCounty);
+          if (d.settings.localState)   setLocalState(d.settings.localState);
+          if (d.settings.localLookback) setLocalLookback(d.settings.localLookback);
         }
         var restoredSrcs = d.settings&&d.settings.activeSources ? new Set(d.settings.activeSources) : null;
         setConn(function(s){return Object.assign({},s,{server:true});});
@@ -1522,6 +1555,12 @@ function App() {
           .then(function(d){if(d&&d.assessments) setThresholds(d);}).catch(function(){});
         fetch(srvUrl+'/local-monitor').then(function(r){return r.json();})
           .then(function(d){if(d&&d.sectors&&d.sectors.length) setLocalMon(d);}).catch(function(){});
+        fetch(srvUrl+'/local-briefing').then(function(r){return r.json();})
+          .then(function(d){if(d&&d.updatedAt) setLocalBriefing(d);}).catch(function(){});
+        fetch(srvUrl+'/local-articles').then(function(r){return r.json();})
+          .then(function(d){if(d&&d.articles&&d.articles.length){setLocalArts(d.articles);setLocalLastRun(new Date());}}).catch(function(){});
+        fetch(srvUrl+'/local-briefing').then(function(r){return r.json();})
+          .then(function(d){if(d&&d.updatedAt) setLocalBriefing(d);}).catch(function(){});
       })
       .catch(function(){setConn(function(s){return Object.assign({},s,{server:false});});});
   }
@@ -1601,7 +1640,8 @@ function App() {
     var cfg=Object.assign({lmUrl:lmUrl,lmModel:lmMod,lookbackDays:lbDays,
       lastRun:lastRun?new Date(lastRun).toISOString():null,
       country:country,keywords:kws,activeTopics:Array.from(actTop),
-      activeSources:Array.from(actSrc),ingestSrc:ingestSrc,trend:trend
+      activeSources:Array.from(actSrc),ingestSrc:ingestSrc,trend:trend,
+      localCity:localCity,localCounty:localCounty,localState:localState,localLookback:localLookback
     },extraSettings||{});
     fetch(srvUrl+'/save',{
       method:'POST', headers:{'Content-Type':'application/json'},
@@ -1675,11 +1715,12 @@ function App() {
   }
 
   function buildQACtx(ql, topicFilter) {
-    if (!arts.length) return null;
+    var allArts = arts.concat(localArts.filter(function(a){return !a.dismissed;})); // national + active local articles
+    if (!allArts.length) return null;
     var pool = (topicFilter && topicFilter !== 'all')
-      ? arts.filter(function(a){return a.topicId===topicFilter;})
-      : arts;
-    if (!pool.length) pool = arts; // fall back to full archive if topic has no articles
+      ? allArts.filter(function(a){return a.topicId===topicFilter;})
+      : allArts;
+    if (!pool.length) pool = allArts; // fall back to full archive if topic has no articles
     var qlc = ql.toLowerCase();
     var scored = pool.map(function(a){return{a:a,s:scoreArt(a,qlc)};}
       ).sort(function(x,y){return y.s-x.s;}).slice(0,40);
@@ -1689,7 +1730,7 @@ function App() {
     });
     var tc={};
     arts.forEach(function(a){tc[a.topicId]=(tc[a.topicId]||0)+1;});
-    return 'ARCHIVE: '+arts.length+' articles. '+Object.entries(tc).map(function(e){return e[0]+':'+e[1];}).join(', ')+
+    return 'ARCHIVE: '+allArts.length+' articles ('+arts.length+' national, '+localArts.length+' local). '+Object.entries(tc).map(function(e){return e[0]+':'+e[1];}).join(', ')+
       '\n\nTOP '+scored.length+' RELEVANT:\n'+lines.join('\n');
   }
 
@@ -1889,7 +1930,8 @@ function App() {
     if (drillQuery===label) { setDrillQuery(null); setDrillArts([]); return; }
     setDrillQuery(label);
     var words = label.toLowerCase().split(/\s+/).filter(function(w){return w.length>3;});
-    var scored = arts.map(function(a){
+    var drillPool = (view==='local') ? localArts.filter(function(a){return !a.dismissed;}).concat(arts) : arts;
+    var scored = drillPool.map(function(a){
       var t=(a.title||'').toLowerCase(), sn=(a.snippet||'').toLowerCase(), sc=0;
       words.forEach(function(w){if(t.includes(w))sc+=3; if(sn.includes(w))sc+=1;});
       return {a:a,s:sc};
@@ -2283,6 +2325,28 @@ function App() {
             effectiveJSRC.map(function(s){return h('div',{key:s.id,className:'srctog '+(actSrc.has(s.id)?'on-j':''),onClick:function(){togSrc(s.id);}},
               (actSrc.has(s.id)?'(*)':'( )')+' '+s.name);})))),
 
+      h('div',{className:'card mb12'},
+        h('div',{className:'card-h'},'Local Location'),
+        h('div',{style:{fontSize:'12px',color:'var(--muted)',marginBottom:'12px'}},'Used by the Local tab to collect community-specific news and briefings.'),
+        h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'10px',marginBottom:'6px'}},
+          h('div',null,
+            h('div',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--muted)',marginBottom:'5px',letterSpacing:'1px'}},'CITY'),
+            h('input',{className:'inp',value:localCity,placeholder:'e.g. Austin',
+              onInput:function(e){setLocalCity(e.target.value);},
+              onBlur:function(){saveSrv();}})),
+          h('div',null,
+            h('div',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--muted)',marginBottom:'5px',letterSpacing:'1px'}},'COUNTY'),
+            h('input',{className:'inp',value:localCounty,placeholder:'e.g. Travis',
+              onInput:function(e){setLocalCounty(e.target.value);},
+              onBlur:function(){saveSrv();}})),
+          h('div',null,
+            h('div',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--muted)',marginBottom:'5px',letterSpacing:'1px'}},'STATE / PROVINCE'),
+            h('input',{className:'inp',value:localState,placeholder:'e.g. Texas',
+              onInput:function(e){setLocalState(e.target.value);},
+              onBlur:function(){saveSrv();}}))),  
+        h('div',{style:{fontSize:'11px',color:'var(--dim)',fontFamily:'var(--m)'}},'City + State gives the best local results.')),
+
+
       h('div',{className:'card'},
         h('div',{className:'card-h'},'Collection Run'),
 
@@ -2397,8 +2461,23 @@ function App() {
       h('div',{className:'card mb12'},
         h('div',{className:'card-h'},'Ask the Data'),
         h('div',{style:{display:'flex',alignItems:'center',gap:'10px',marginBottom:'10px',flexWrap:'wrap'}},
-          h('div',{style:{fontSize:'13px',color:'var(--muted)',flex:1}},
-            arts.length>0 ? 'Querying '+arts.length+' articles via '+lmMod+'.' : 'No articles -- will use model knowledge.'),
+          h('div',{style:{flex:1}},
+            h('div',{style:{display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap',marginBottom:'6px'}},
+              h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--muted)',letterSpacing:'1px'}},'QUERYING:'),
+              h('span',{style:{fontFamily:'var(--m)',fontSize:'11px',padding:'2px 8px',borderRadius:'10px',
+                background:arts.length>0?'rgba(0,180,216,.1)':'var(--s3)',
+                border:'1px solid '+(arts.length>0?'rgba(0,180,216,.35)':'var(--border)'),
+                color:arts.length>0?'var(--cyan)':'var(--muted)'}},
+                arts.length+' national'),
+              localArts.filter(function(a){return !a.dismissed;}).length>0&&h('span',{style:{
+                fontFamily:'var(--m)',fontSize:'11px',padding:'2px 8px',borderRadius:'10px',
+                background:'rgba(0,232,122,.1)',border:'1px solid rgba(0,232,122,.35)',
+                color:'var(--green)'}},
+                localArts.filter(function(a){return !a.dismissed;}).length+' local'),
+              (arts.length+localArts.filter(function(a){return !a.dismissed;}).length)===0&&
+                h('span',{style:{fontSize:'12px',color:'var(--muted)'}},'No articles -- will use model knowledge.'),
+              (arts.length+localArts.filter(function(a){return !a.dismissed;}).length)>0&&
+                h('span',{style:{fontSize:'11px',color:'var(--dim)'}},'via '+lmMod))),
           h('div',{style:{display:'flex',alignItems:'center',gap:'6px'}},
             h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--muted)',letterSpacing:'1px'}},'TOPIC:'),
             h('select',{className:'inp',style:{width:'180px',padding:'5px 10px',fontSize:'12px'},
@@ -2429,31 +2508,33 @@ function App() {
         })));
   }
 
+  function renderDrillPanel() {
+    if (!drillQuery) return null;
+    return h('div',{id:'drill-panel',className:'card mt12',style:{border:'1px solid rgba(0,212,255,.3)'}},
+      h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'10px'}},
+        h('div',{className:'card-h',style:{marginBottom:0,color:'var(--cyan)'}},'[>] Articles: '+drillQuery.slice(0,60)+(drillQuery.length>60?'...':'')),
+        h('span',{style:{cursor:'pointer',fontFamily:'var(--m)',fontSize:'11px',color:'var(--muted)'},
+          onClick:function(){setDrillQuery(null);setDrillArts([]);}}, '[x] close')),
+      drillArts.length===0
+        ? h('div',{style:{fontSize:'12px',color:'var(--dim)',fontFamily:'var(--m)',padding:'8px 0'}},
+            'No matching articles found in archive. Try collecting more data on this topic.')
+        : h('div',{className:'alist',style:{maxHeight:'320px',overflowY:'auto'}},
+            drillArts.map(function(a){
+              var atp=topicFor(a.topicId);
+              return h('div',{key:a.id,className:'aitem'},
+                h('div',{className:'atitle'},a.title),
+                h('div',{className:'ameta'},
+                  h('span',{className:'asrc'},a.source),
+                  h('span',{className:'adate'},a.date),
+                  atp&&h('span',{className:'tag',style:{background:atp.color+'15',borderColor:atp.color+'40',color:atp.color}},atp.label.split(' ')[0])),
+                a.snippet&&h('div',{className:'asnip'},a.snippet.slice(0,160)+(a.snippet.length>160?'...':'')),
+                a.url&&h('a',{href:a.url,target:'_blank',rel:'noopener noreferrer',className:'alink'},'[->] '+(a.url.length>65?a.url.slice(0,65)+'...':a.url)));
+            })));
+  }
+
   function vPatterns() {
     // Drill panel — plain return value, NOT a component (no hooks, no h() call)
-    function renderDrillPanel() {
-      if (!drillQuery) return null;
-      return h('div',{id:'drill-panel',className:'card mt12',style:{border:'1px solid rgba(0,212,255,.3)'}},
-        h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'10px'}},
-          h('div',{className:'card-h',style:{marginBottom:0,color:'var(--cyan)'}},'[>] Articles: '+drillQuery.slice(0,60)+(drillQuery.length>60?'...':'')),
-          h('span',{style:{cursor:'pointer',fontFamily:'var(--m)',fontSize:'11px',color:'var(--muted)'},
-            onClick:function(){setDrillQuery(null);setDrillArts([]);}}, '[x] close')),
-        drillArts.length===0
-          ? h('div',{style:{fontSize:'12px',color:'var(--dim)',fontFamily:'var(--m)',padding:'8px 0'}},
-              'No matching articles found in archive. Try collecting more data on this topic.')
-          : h('div',{className:'alist',style:{maxHeight:'320px',overflowY:'auto'}},
-              drillArts.map(function(a){
-                var atp=topicFor(a.topicId);
-                return h('div',{key:a.id,className:'aitem'},
-                  h('div',{className:'atitle'},a.title),
-                  h('div',{className:'ameta'},
-                    h('span',{className:'asrc'},a.source),
-                    h('span',{className:'adate'},a.date),
-                    atp&&h('span',{className:'tag',style:{background:atp.color+'15',borderColor:atp.color+'40',color:atp.color}},atp.label.split(' ')[0])),
-                  a.snippet&&h('div',{className:'asnip'},a.snippet.slice(0,160)+(a.snippet.length>160?'...':'')),
-                  a.url&&h('a',{href:a.url,target:'_blank',rel:'noopener noreferrer',className:'alink'},'[->] '+(a.url.length>65?a.url.slice(0,65)+'...':a.url)));
-              })));
-    }
+
 
     return h('div',null,
       h('div',{style:{display:'flex',alignItems:'center',gap:'8px',marginBottom:'16px',flexWrap:'wrap'}},
@@ -3225,14 +3306,14 @@ function App() {
   }
 
   var NAV=[{id:'monitor',ic:'[~]',label:'Monitor'},{id:'intake',ic:'[o]',label:'Intake'},
-    {id:'interrogate',ic:'[?]',label:'Interrogate'},{id:'patterns',ic:'[^]',label:'Patterns'},{id:'thresholds',ic:'[T]',label:'Thresholds'},{id:'national',ic:'[N]',label:'National'},{id:'archive',ic:'[=]',label:'Archive'},{id:'sources',ic:'[#]',label:'Sources'}];
-  var TITLES={monitor:'Signal Monitor',intake:'Data Intake',archive:'Article Archive',interrogate:'Interrogate',patterns:'Pattern Analysis',sources:'Source Manager',thresholds:'Planetary Thresholds',national:'National Monitor'};
+    {id:'interrogate',ic:'[?]',label:'Interrogate'},{id:'patterns',ic:'[^]',label:'Patterns'},{id:'thresholds',ic:'[T]',label:'Thresholds'},{id:'national',ic:'[N]',label:'National'},{id:'local',ic:'[L]',label:'Local'},{id:'archive',ic:'[=]',label:'Archive'},{id:'sources',ic:'[#]',label:'Sources'}];
+  var TITLES={monitor:'Signal Monitor',intake:'Data Intake',archive:'Article Archive',interrogate:'Interrogate',patterns:'Pattern Analysis',sources:'Source Manager',thresholds:'Planetary Thresholds',national:'National Monitor',local:'Local Monitor'};
 
   return h('div',{className:'app'},
     h('aside',{className:'sb'},
       h('div',{className:'sb-logo'},
         h('div',{className:'sb-logo-t'},'Collapse',h('br'),'Monitor'),
-        h('div',{className:'sb-logo-s'},'Systemic Risk Tracker v0.3')),
+        h('div',{className:'sb-logo-s'},'Systemic Risk Tracker v0.4')),
       h('nav',{className:'sb-nav'},
         NAV.map(function(n){
           return h('div',{key:n.id,className:'sb-ni '+(view===n.id?'active':''),onClick:function(){setView(n.id);}},
@@ -3262,7 +3343,321 @@ function App() {
         view==='patterns'&&vPatterns(),
         view==='sources'&&vSources(),
         view==='thresholds'&&vThresholds(),
-        view==='national'&&vLocal())));
+        view==='national'&&vLocal(),
+        view==='local'&&vLocalCommunity())));
+
+  // ── LOCAL COMMUNITY ─────────────────────────────────────────────────────
+
+  function collectLocalNews() {
+    if (localCollecting) return;
+    if (!localCity && !localCounty && !localState) {
+      setErr('Set your location in Intake (Local Location section) before collecting.');
+      return;
+    }
+    setLocalCollecting(true); setLocalCollMsg('Searching local news...'); setErr('');
+    var from = localLastRun
+      ? new Date(localLastRun).toISOString().split('T')[0]
+      : new Date(Date.now() - localLookback*86400000).toISOString().split('T')[0];
+    fetch(srvUrl+'/collect-local',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({city:localCity,county:localCounty,state:localState,fromDate:from,topics:Array.from(actTop)})
+    })
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.error) throw new Error(d.error);
+      var newA=d.articles||[];
+      // Merge deduped, set state once, persist in same step
+      var merged = (function(prev){
+        var ex=new Set(prev.map(function(a){return a.url;}).filter(Boolean));
+        return prev.concat(newA.filter(function(a){return a.url&&!ex.has(a.url);}));
+      })(localArts);
+      setLocalArts(merged);
+      setLocalLastRun(new Date());
+      setLocalCollMsg('Collected '+newA.length+' new -- '+merged.length+' total local articles.');
+      setTimeout(function(){setLocalCollMsg('');},4000);
+      fetch(srvUrl+'/local-articles',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({articles:merged})});
+    })
+    .catch(function(e){setErr('Collect error: '+e.message+' -- Is server.py running?');})
+    .finally(function(){setLocalCollecting(false);});
+  }
+
+  function dismissLocalArt(url) {
+    var updated = localArts.map(function(a){
+      return a.url===url ? Object.assign({},a,{dismissed:true}) : a;
+    });
+    setLocalArts(updated);
+    fetch(srvUrl+'/local-articles',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({articles:updated})});
+  }
+
+  function restoreLocalArt(url) {
+    var updated = localArts.map(function(a){
+      return a.url===url ? Object.assign({},a,{dismissed:false}) : a;
+    });
+    setLocalArts(updated);
+    fetch(srvUrl+'/local-articles',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({articles:updated})});
+  }
+
+  function runLocalBriefing() {
+    if (localBriefRefreshing) return;
+    if (!localCity && !localCounty && !localState) { setErr('Set your location first.'); return; }
+    setLocalBriefRefreshing(true); setErr('');
+    var now=new Date();
+    var todayStr=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
+    var locLabel=[localCity,localCounty?localCounty+' County':'',localState].filter(Boolean).join(', ');
+    var activeLocal = localArts.filter(function(a){return !a.dismissed;});
+    var pool=activeLocal.length>=5?activeLocal:activeLocal.concat(arts).slice(0,60);
+    var headlines=pool.slice().sort(function(a,b){return(b.date||'').localeCompare(a.date||'');})
+      .slice(0,20).map(function(a,i){return (i+1)+'. ['+a.topicId+'] '+a.date+' | '+(a.location||'')+' | '+a.title;}).join('\n');
+    var isDeepDive = localTopic !== 'all';
+    var deepTopic = isDeepDive ? (TOPICS.find(function(t){return t.id===localTopic;})||{label:localTopic,id:localTopic}) : null;
+    var sys, prompt;
+    if (isDeepDive) {
+      sys='You are a community risk analyst specializing in '+deepTopic.label+'. Today: '+todayStr+'.'
+        +'\nOutput ONLY a raw JSON object. No markdown.'
+        +'\nKeys: location, updatedAt, topic, overallSignal (critical|elevated|moderate|low),'
+        +'\n  summary (4-5 sentences with specifics about '+deepTopic.label+' in this community),'
+        +'\n  sectors (6 objects: name/signal/collapseRate/status/keyDevelopment/trend/detail),'
+        +'\n  localRisks (5 strings specific to '+deepTopic.label+'), immediateWatchItems (5 strings),'
+        +'\n  communityImpacts (4 strings: direct resident effects), regionalContext (2 sentences),'
+        +'\n  keyDataPoints (4 strings: specific numbers/stats), outlook (2 sentences on trajectory).'
+        +'\nSignal: critical elevated moderate low. Trend: accelerating stable slow recovering.'
+        +'\nStart with { end with }.';
+      prompt='Deep-dive local briefing for '+locLabel+' focused on: '+deepTopic.label+'.'
+        +'\n\nHeadlines:\n'+headlines
+        +'\n\nBe highly specific to '+locLabel+'. Include named local infrastructure, employers, water sources, etc. Return JSON now.';
+    } else {
+      sys='You are a community risk analyst. Today: '+todayStr+'.'
+        +'\nOutput ONLY a raw JSON object. No markdown.'
+        +'\nKeys: location, updatedAt, overallSignal (critical|elevated|moderate|low),'
+        +'\n  summary (3-4 sentences), sectors (6 objects: name/signal/collapseRate/status/keyDevelopment/trend),'
+        +'\n  localRisks (4 strings), immediateWatchItems (4 strings), communityImpacts (3 strings), regionalContext (2 sentences).'
+        +'\nSectors: Infrastructure, Economy & Jobs, Food & Water, Energy, Public Health, Governance & Safety.'
+        +'\nSignal: critical elevated moderate low. Trend: accelerating stable slow recovering.'
+        +'\nStart with { end with }.';
+      prompt='Local briefing for: '+locLabel+'.'
+        +'\n\nHeadlines:\n'+headlines
+        +'\n\nBe concrete and specific to '+locLabel+'. Return JSON now.';
+    }
+    callLM(sys,prompt,isDeepDive?7000:6000)
+      .then(function(txt){
+        var p=parseJson(txt);
+        if(!p){setErr('Could not parse briefing JSON. Try again.');return;}
+        p.location=p.location||locLabel; p.updatedAt=p.updatedAt||todayStr;
+        p.overallSignal=p.overallSignal||'moderate'; p.sectors=p.sectors||[];
+        p.localRisks=p.localRisks||[]; p.immediateWatchItems=p.immediateWatchItems||[];
+        p.communityImpacts=p.communityImpacts||[]; p.regionalContext=p.regionalContext||'';
+        setLocalBriefing(p);
+        fetch(srvUrl+'/local-briefing',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});
+      })
+      .catch(function(e){setErr('LM error: '+e.message);})
+      .finally(function(){setLocalBriefRefreshing(false);});
+  }
+
+  function vLocalCommunity() {
+    var locLabel=[localCity,localCounty?localCounty+' County':'',localState].filter(Boolean).join(', ')||'Not set';
+    var hasLoc=!!(localCity||localCounty||localState);
+    var SIGC={critical:'#ff2d4a',elevated:'#ff7733',moderate:'#ffd000',low:'#00e87a'};
+    var TARR={accelerating:'++',stable:'>',slow:'+',recovering:'v'};
+    var bHas=!!(localBriefing&&localBriefing.updatedAt);
+    return h('div',null,
+      h('div',{style:{display:'flex',alignItems:'center',gap:'10px',marginBottom:'14px',flexWrap:'wrap'}},
+        h('div',{style:{display:'flex',alignItems:'center',gap:'10px'}},
+          h('div',{style:{fontFamily:'var(--h)',fontSize:'18px',fontWeight:700,letterSpacing:'2px',color:'var(--text)'}},'[L] '+locLabel),
+          h('span',{style:{fontFamily:'var(--m)',fontSize:'11px',padding:'3px 9px',borderRadius:'10px',
+            background:localArts.length>0?'rgba(0,232,122,.12)':'var(--s3)',
+            border:'1px solid '+(localArts.length>0?'rgba(0,232,122,.35)':'var(--border)'),
+            color:localArts.length>0?'var(--green)':'var(--muted)'}},
+            localArts.filter(function(a){return !a.dismissed;}).length+' local articles'+
+              (localArts.filter(function(a){return a.dismissed;}).length>0?' ('+localArts.filter(function(a){return a.dismissed;}).length+' dismissed)':'')),
+          localArts.length>0&&h('button',{className:'btn btn-sm',
+            style:{fontSize:'10px',padding:'2px 7px',color:'var(--red)',borderColor:'rgba(255,45,74,.3)'},
+            onClick:function(){if(window.confirm('Clear all '+localArts.length+' local articles for '+locLabel+'?')){
+              setLocalArts([]);setLocalLastRun(null);setLocalCollMsg('');
+              fetch(srvUrl+'/local-articles',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({articles:[]})})
+            }}},'[x] Clear')),
+        hasLoc&&h('div',{style:{display:'flex',alignItems:'center',gap:'6px'}},
+          h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--muted)',letterSpacing:'1px'}},'LOOKBACK:'),
+          h('select',{className:'inp',style:{width:'110px',padding:'4px 8px',fontSize:'11px'},
+            value:localLookback,
+            onChange:function(e){if(!localLastRun) setLocalLookback(parseInt(e.target.value,10));},
+            title:localLastRun?'Clear articles to change lookback':'Select how far back to search'},
+            [{l:'7 days',d:7},{l:'30 days',d:30},{l:'60 days',d:60},{l:'90 days',d:90},{l:'6 months',d:180},{l:'1 year',d:365}]
+              .map(function(opt){return h('option',{key:opt.d,value:opt.d},opt.l);})),
+          h('button',{className:'btn btn-sm',disabled:localCollecting,onClick:collectLocalNews},
+            localCollecting?h('span',null,h('span',{className:'spin'},'@ '),'Collecting...'):'[o] Collect Local News')),
+        hasLoc&&h('div',{style:{display:'flex',alignItems:'center',gap:'6px'}},
+          h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--muted)',letterSpacing:'1px'}},'BRIEFING:'),
+          h('select',{className:'inp',style:{width:'185px',padding:'4px 8px',fontSize:'11px'},
+            value:localTopic,onChange:function(e){setLocalTopic(e.target.value);}},
+            h('option',{value:'all'},'Full Briefing - All Topics'),
+            TOPICS.map(function(t){return h('option',{key:t.id,value:t.id},'Deep Dive: '+t.label);})),
+          h('button',{className:'btn btn-p btn-sm',disabled:localBriefRefreshing,onClick:runLocalBriefing},
+            localBriefRefreshing?h('span',null,h('span',{className:'spin'},'@ '),'Analyzing...'):'[^] '+(bHas?(localTopic==='all'?'Refresh Briefing':'Refresh Deep Dive'):(localTopic==='all'?'Run Full Briefing':'Run Deep Dive')))),
+        bHas&&h('span',{style:{fontFamily:'var(--m)',fontSize:'11px',color:'var(--muted)'}},'Updated: '+localBriefing.updatedAt),
+        localArts.length>0&&h('button',{className:'btn btn-sm',
+          style:{marginLeft:'auto',fontSize:'10px',
+            background:localArchiveOpen?'rgba(0,180,216,.12)':'',
+            borderColor:localArchiveOpen?'rgba(0,180,216,.5)':'',
+            color:localArchiveOpen?'var(--cyan)':'var(--muted)'},
+          onClick:function(){setLocalArchiveOpen(function(v){return !v;});}},
+          localArchiveOpen?'[x] Close Archive':'[=] Local Archive'),
+        localCollMsg&&h('span',{style:{fontFamily:'var(--m)',fontSize:'11px',color:'var(--green)'}},localCollMsg)),
+      !hasLoc&&h('div',{className:'alert alert-info'},'Set City, County, and State in Intake (Local Location section) then return here.'),
+      err&&h('div',{className:'alert alert-err'},err),
+
+      // ── LOCAL ARCHIVE PANEL ──
+      localArchiveOpen&&h('div',{className:'card mb12'},
+        h('div',{style:{display:'flex',alignItems:'center',gap:'10px',marginBottom:'12px',flexWrap:'wrap'}},
+          h('div',{className:'card-h',style:{marginBottom:0}},
+            'Local Archive - '+localArts.length+' articles'),
+          h('input',{className:'inp',style:{flex:1,minWidth:'140px',padding:'4px 10px',fontSize:'12px'},
+            value:localArcSearch,placeholder:'Search titles...',
+            onInput:function(e){setLocalArcSearch(e.target.value);}}),
+          h('select',{className:'inp',style:{width:'140px',padding:'4px 8px',fontSize:'11px'},
+            value:localArcFilter,onChange:function(e){setLocalArcFilter(e.target.value);}},
+            h('option',{value:'all'},'All Topics'),
+            TOPICS.map(function(t){return h('option',{key:t.id,value:t.id},t.label);})),
+          h('label',{style:{display:'flex',alignItems:'center',gap:'5px',fontSize:'11px',
+            color:'var(--muted)',cursor:'pointer',fontFamily:'var(--m)',whiteSpace:'nowrap'}},
+            h('input',{type:'checkbox',checked:localArcShowDism,
+              onChange:function(e){setLocalArcShowDism(e.target.checked);}}),
+            'Show dismissed')),
+        h('div',{style:{maxHeight:'420px',overflowY:'auto'}},
+          (function(){
+            var filtered = localArts.filter(function(a){
+              if (!localArcShowDism && a.dismissed) return false;
+              if (localArcFilter!=='all' && a.topicId!==localArcFilter) return false;
+              if (localArcSearch.trim()) {
+                var q=localArcSearch.toLowerCase();
+                return (a.title||'').toLowerCase().includes(q)||(a.source||'').toLowerCase().includes(q);
+              }
+              return true;
+            });
+            if (!filtered.length) return h('div',{style:{padding:'20px',textAlign:'center',
+              fontSize:'12px',color:'var(--muted)'}},
+              localArts.length>0?'No articles match the current filters.':'No local articles collected yet.');
+            return filtered.map(function(a){
+              var tp=topicFor(a.topicId);
+              var dim=a.dismissed;
+              return h('div',{key:a.url||a.id,style:{
+                  padding:'10px 12px',marginBottom:'6px',borderRadius:'4px',
+                  background:dim?'rgba(255,45,74,.04)':'var(--s2)',
+                  border:'1px solid '+(dim?'rgba(255,45,74,.15)':'var(--border)'),
+                  opacity:dim?0.55:1}},
+                h('div',{style:{display:'flex',alignItems:'flex-start',gap:'8px'}},
+                  h('div',{style:{flex:1}},
+                    h('div',{style:{fontSize:'12px',fontWeight:600,
+                      color:dim?'var(--muted)':'var(--text)',
+                      textDecoration:dim?'line-through':'none',
+                      marginBottom:'4px',lineHeight:'1.4'}},a.title),
+                    h('div',{style:{display:'flex',gap:'6px',alignItems:'center',flexWrap:'wrap'}},
+                      h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--dim)'}},a.source),
+                      h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--dim)'}},a.date),
+                      a.location&&h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--dim)'}},a.location),
+                      tp&&h('span',{className:'tag',style:{fontSize:'10px',
+                        background:tp.color+'15',borderColor:tp.color+'40',color:tp.color}},tp.label),
+                      dim&&h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',
+                        color:'rgba(255,45,74,.7)',letterSpacing:'1px'}},'[DISMISSED]'))),
+                  h('div',{style:{display:'flex',gap:'5px',flexShrink:0}},
+                    a.url&&h('a',{href:a.url,target:'_blank',rel:'noopener noreferrer',
+                      className:'btn btn-sm',style:{fontSize:'10px',padding:'2px 6px',
+                        textDecoration:'none'}},'[->]'),
+                    dim
+                      ? h('button',{className:'btn btn-sm',
+                          style:{fontSize:'10px',padding:'2px 6px',color:'var(--green)',
+                            borderColor:'rgba(0,232,122,.4)'},
+                          onClick:function(){restoreLocalArt(a.url);}},
+                          '[+] Restore')
+                      : h('button',{className:'btn btn-sm',
+                          style:{fontSize:'10px',padding:'2px 6px',color:'rgba(255,45,74,.8)',
+                            borderColor:'rgba(255,45,74,.35)'},
+                          onClick:function(){dismissLocalArt(a.url);}},
+                          '[x] Dismiss'))));
+            });
+          })())),
+
+      !localArchiveOpen&&localArts.length>0&&h('div',{className:'card mb12'},
+
+        h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'10px'}},
+          h('div',{className:'card-h',style:{marginBottom:0}},localArts.length+' Local Articles'),
+          localLastRun&&h('span',{style:{fontFamily:'var(--m)',fontSize:'11px',color:'var(--muted)'}},'Last collected: '+new Date(localLastRun).toLocaleDateString())),
+        h('div',{className:'alist',style:{maxHeight:'220px',overflowY:'auto'}},
+          localArts.slice().reverse().slice(0,20).map(function(a){
+            var tp=topicFor(a.topicId);
+            return h('div',{key:a.id,className:'aitem'},
+              h('div',{className:'atitle'},a.title),
+              h('div',{className:'ameta'},
+                h('span',{className:'asrc'},a.source),h('span',{className:'adate'},a.date),
+                tp&&h('span',{className:'tag',style:{background:tp.color+'15',borderColor:tp.color+'40',color:tp.color}},tp.label.split(' ')[0])),
+              a.snippet&&h('div',{className:'asnip'},a.snippet.slice(0,130)+(a.snippet.length>130?'...':'')),
+              a.url&&h('a',{href:a.url,target:'_blank',rel:'noopener noreferrer',className:'alink'},'[->] '+(a.url.length>60?a.url.slice(0,60)+'...':a.url)));
+          }))),
+      localBriefRefreshing&&h('div',{className:'card',style:{textAlign:'center',padding:'30px'}},
+        h('div',{className:'spin',style:{fontSize:'20px',color:'var(--cyan)',display:'block',marginBottom:'8px'}},'@'),
+        h('div',{style:{fontSize:'12px',color:'var(--muted)'}},'Generating local briefing for '+locLabel+'...')),
+      !bHas&&!localBriefRefreshing&&h('div',{className:'empty'},
+        h('div',{className:'empty-t'},'No Local Briefing'),
+        h('div',{className:'empty-s'},hasLoc?'Collect local news then click Run Local Briefing.':'Set your location in Intake to get started.')),
+      bHas&&!localBriefRefreshing&&h('div',null,
+        h('div',{className:'card mb12'},
+          h('div',{style:{display:'flex',alignItems:'center',gap:'10px',marginBottom:'8px',flexWrap:'wrap'}},
+            h('div',{className:'card-h',style:{marginBottom:0}},'Overall Assessment'),
+            localBriefing.overallSignal&&h('span',{style:{padding:'3px 10px',borderRadius:'3px',fontSize:'12px',fontFamily:'var(--m)',fontWeight:600,textTransform:'uppercase',
+              background:(SIGC[localBriefing.overallSignal]||'#00e87a')+'12',border:'1px solid '+(SIGC[localBriefing.overallSignal]||'#00e87a')+'40',
+              color:SIGC[localBriefing.overallSignal]||'#00e87a'}},localBriefing.overallSignal)),
+          h('div',{style:{fontSize:'13px',color:'var(--text)',lineHeight:'1.75',marginBottom:'8px'}},localBriefing.summary),
+          localBriefing.regionalContext&&h('div',{style:{fontSize:'12px',color:'var(--muted)',lineHeight:'1.6',fontStyle:'italic',borderTop:'1px solid var(--border)',paddingTop:'8px'}},localBriefing.regionalContext)),
+        h('div',{className:'g2'},
+          h('div',{className:'card'},
+            h('div',{className:'card-h'},'Local Sector Status'),
+            (localBriefing.sectors||[]).map(function(s){
+              var sc=SIGC[s.signal]||'#00e87a';
+              return h('div',{key:s.name,className:'ci'},
+                h('div',{className:'ci-hd'},
+                  h('span',{className:'ci-lbl',style:{color:'var(--text)',fontSize:'12px'}},s.name),
+                  h('div',{className:'ci-rhs'},
+                    s.trend&&h('span',{style:{fontFamily:'var(--m)',fontSize:'12px',color:s.trend==='accelerating'?'#ff7733':s.trend==='recovering'?'#00e87a':'var(--muted)'}},TARR[s.trend]||'>'),
+                    h('span',{className:'ci-sig',style:{background:sc+'12',border:'1px solid '+sc+'35',color:sc}},s.signal),
+                    s.collapseRate!=null&&h('span',{className:'ci-val',style:{color:sc}},s.collapseRate+'%'))),
+                h('div',{className:'ci-bar'},h('div',{className:'ci-fill',style:{width:(s.collapseRate||0)+'%',background:'linear-gradient(90deg,'+sc+'70,'+sc+')'}})),
+                s.status&&h('div',{className:'ci-key'},s.status),
+                s.keyDevelopment&&h('div',{style:{fontSize:'11px',color:'var(--cyan)',marginTop:'3px',fontStyle:'italic'}},s.keyDevelopment));
+            })),
+          h('div',null,
+            h('div',{className:'card mb12'},
+              h('div',{className:'card-h',style:{color:'#ff6b7d'}},'Local Risk Factors'),
+              h('div',{style:{fontSize:'11px',color:'var(--dim)',fontFamily:'var(--m)',marginBottom:'8px'}},'Click any item to find supporting articles'),
+              h('div',null,(localBriefing.localRisks||[]).map(function(r,i){
+                var active=drillQuery===r;
+                return h('div',{key:i,style:{
+                    padding:'7px 10px',marginBottom:'5px',borderRadius:'3px',cursor:'pointer',
+                    background:active?'rgba(255,45,74,.08)':'var(--s3)',
+                    border:'1px solid '+(active?'rgba(255,45,74,.4)':'var(--border)'),
+                    fontSize:'12px',color:active?'#ff6b7d':'#ff8a8a',lineHeight:'1.5'},
+                  onClick:function(){openDrill(r);}},
+                  h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:active?'#ff6b7d':'var(--dim)',marginRight:'6px'}},'[!]'),r);
+              }))),
+            h('div',{className:'card mb12'},
+              h('div',{className:'card-h',style:{color:'#ffd000'}},'Watch Items - Next 30 Days'),
+              h('div',null,(localBriefing.immediateWatchItems||[]).map(function(r,i){
+                var active=drillQuery===r;
+                return h('div',{key:i,style:{
+                    padding:'7px 10px',marginBottom:'5px',borderRadius:'3px',cursor:'pointer',
+                    background:active?'rgba(255,208,0,.08)':'var(--s3)',
+                    border:'1px solid '+(active?'rgba(255,208,0,.4)':'var(--border)'),
+                    fontSize:'12px',color:active?'#ffd000':'#ffe066',lineHeight:'1.5'},
+                  onClick:function(){openDrill(r);}},
+                  h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:active?'#ffd000':'var(--dim)',marginRight:'6px'}},'[~]'),r);
+              }))),
+            h('div',{className:'card mb12'},
+              h('div',{className:'card-h',style:{color:'#00b4d8'}},'Community Impacts'),
+              h('ul',{className:'bullets'},(localBriefing.communityImpacts||[]).map(function(r,i){return h('li',{key:i},r);}))),
+            renderDrillPanel()))));}
+
+
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(h(App, null));

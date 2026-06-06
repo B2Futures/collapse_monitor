@@ -1,4 +1,4 @@
-# Collapse Monitor
+# Collapse Monitor v0.4
 
 A local, offline-first tool for tracking systemic collapse signals across 15 categories — climate, governance, conflict, water, food, energy, finance, trade, infrastructure, health systems, disease, manufacturing, migration, agriculture, and technology. Collects articles via DuckDuckGo News and/or GDELT, stores them locally, and uses a locally-running LLM (via LM Studio) to analyze patterns and answer questions about the data.
 
@@ -51,8 +51,9 @@ LM Studio lets you run models entirely on your own hardware. Which model to pick
 |---|---|---|---|
 | **Qwen2.5-14B-Instruct** | 16 GB | ★★★★★ | Best overall for this use case. Strong at structured JSON output which the Patterns analyzer needs. |
 | **Mistral-Nemo-Instruct-2407** | 16 GB | ★★★★☆ | Excellent at summarization and Q&A. Good alternative to Qwen. |
+| **Gemma-4-12B** | 16 GB | ★★★★☆ | Google's latest. Fast and accurate, good balance of JSON and prose. |
 | **Llama-3.1-8B-Instruct** | 10 GB | ★★★★☆ | Good balance of speed and quality. Works well on 12 GB RAM. |
-| **Gemma-2-9B-Instruct** | 10 GB | ★★★★☆ | Google's model, fast and accurate. Good for the Interrogate view. |
+| **Gemma-2-9B-Instruct** | 10 GB | ★★★★☆ | Fast and accurate. Good for the Interrogate view. |
 | **Phi-3.5-mini-instruct** | 6 GB | ★★★☆☆ | Runs on 8 GB RAM. Decent but struggles with complex JSON output. |
 | **Gemma-2-2B-Instruct** | 4 GB | ★★☆☆☆ | Last resort for low RAM. Limited analysis quality. |
 
@@ -71,13 +72,16 @@ LM Studio lets you run models entirely on your own hardware. Which model to pick
 ## Step 4 — Start the Model Server in LM Studio
 
 1. Click the **Developer** tab (the `<->` icon on the left sidebar)
-2. Click **Start Server** — the button turns green and shows `Running on port 1234`
-3. In the model dropdown at the top, select the model you downloaded
-4. Leave LM Studio running in the background
+2. **Enable CORS** — find the CORS toggle and turn it on. Without this the browser will block connections to LM Studio.
+3. Click **Start Server** — the button turns green and shows `Running on port 1234`
+4. In the model dropdown at the top, select the model you downloaded
+5. Leave LM Studio running in the background
 
 > The server runs at `http://localhost:1234` by default. Collapse Monitor is pre-configured for this address.
 
-**Important:** Note the exact model name shown in LM Studio's dropdown. You'll need to paste this into Collapse Monitor's settings. It usually looks like `qwen2.5-14b-instruct` or `llama-3.1-8b-instruct-q4_k_m` — copy it exactly including any suffixes.
+**Important:** Note the exact model name shown in LM Studio's dropdown. You'll need to paste this into Collapse Monitor's settings. It usually looks like `qwen2.5-14b-instruct` or `gemma-4-12b` — copy it exactly.
+
+**Context window:** LM Studio defaults to a conservative context size. Set it to at least **8,192** for any model, or **16,384+** for Qwen2.5-14B. Go to My Models → your model → Context Length → set the value → Apply.
 
 ---
 
@@ -95,14 +99,13 @@ Click the green **Code** button on GitHub → **Download ZIP** → extract it
 You should have these files:
 ```
 collapse-monitor/
-├── collapse-monitor.html   ← the entire UI (single file)
-├── server.py               ← local web server + search backend
-├── requirements.txt        ← Python dependencies
-├── start.bat               ← Windows launcher
-├── start.sh                ← Mac/Linux launcher
-└── data/                   ← created automatically on first run
-    ├── articles.json       ← your collected articles
-    └── settings.json       ← your saved settings
+├── collapse-monitor.html   <- the entire UI (single file)
+├── server.py               <- local web server + search backend
+├── requirements.txt        <- Python dependencies
+├── start.bat               <- Windows launcher
+├── start.sh                <- Mac/Linux launcher
+├── sources.json            <- editable news source list
+└── data/                   <- created automatically on first run
 ```
 
 ---
@@ -139,19 +142,19 @@ When the app opens, click **Intake** in the left sidebar.
 | LM Studio URL | `http://localhost:1234` (leave as-is) |
 | Model Name | Paste the exact name from LM Studio's dropdown |
 
-Click **Test Connections** — both indicators should turn green. If LM Studio shows OFFLINE, make sure you started the server in LM Studio's Developer tab.
+Click **Test Connections** — both indicators should turn green. If LM Studio shows OFFLINE, make sure you started the server in LM Studio's Developer tab and CORS is enabled.
 
 ### Ingest Source
 
 - **DuckDuckGo** — fast, good for recent news (past 1–12 months). Start here.
-- **GDELT** — global archive of news in 65+ languages, better for older articles and non-English sources. Slower. **Subject to rate limiting** — see note below.
-- **Both** — maximum coverage. Use this for initial collection if you have time.
+- **GDELT** — global archive of news in 65+ languages, better for older articles and non-English sources. Slower. Subject to rate limiting — see note below.
+- **Both** — maximum coverage.
 
-> **GDELT rate limiting:** GDELT is a free public API with no SLA. During large collections it will return HTTP 429 (too many requests) errors. The app handles this automatically — it retries each failed query up to 4 times with increasing wait periods (5s, 10s, 20s). If a query still fails after all retries it is saved to `data/failed_queries.json`. A red warning banner will appear in the Collection Run section showing how many queries failed. Use the **[>] Rerun Failed** button to replay them when ready. Failed queries persist across restarts so you can close the app and retry later. GDELT rate limits typically reset within a few minutes.
+> **GDELT rate limiting:** GDELT is a free public API. During large collections it will return HTTP 429 errors. The app retries each failed query up to 3 times with 30s, 60s, and 120s waits. Failed queries are saved to `data/failed_queries.json` and a warning banner appears in Intake. Use **[>] Rerun Failed** to replay them later. GDELT rate limits typically reset within 5–10 minutes.
 
 ### Topics
 
-All 15 topics are enabled by default. Disable any you don't care about — fewer topics means faster collection. The topics and why they're distinct:
+All 15 topics are enabled by default. Disable any you don't care about — fewer topics means faster collection.
 
 | Topic | Why it's separate |
 |---|---|
@@ -163,17 +166,21 @@ All 15 topics are enabled by default. Disable any you don't care about — fewer
 | Energy Systems | Grid failures, fuel shortages, blackouts |
 | Financial Systems | Bank failures, debt crises, currency collapse |
 | Infrastructure | Roads, bridges, water systems decay |
-| **Governance & Politics** | Democratic backsliding, coups, state failure — accelerates every other category |
-| **Water Systems** | Aquifer depletion, freshwater conflicts — separate from climate because the dynamics differ |
-| **Migration & Displacement** | The human output of most other categories |
-| **Conflict & Geopolitics** | Wars, sanctions, territorial disputes |
-| **Health Systems** | Hospital capacity, drug supply chains, antibiotic resistance |
-| **Technology & AI** | Data center energy, cyberattacks, semiconductor shortages |
-| **Agriculture** | Soil health, fertilizer inputs, crop yields — more granular than food systems |
+| Governance & Politics | Democratic backsliding, coups, state failure |
+| Water Systems | Aquifer depletion, freshwater conflicts |
+| Migration & Displacement | The human output of most other categories |
+| Conflict & Geopolitics | Wars, sanctions, territorial disputes |
+| Health Systems | Hospital capacity, drug supply chains |
+| Technology & AI | Data center energy, cyberattacks, semiconductor shortages |
+| Agriculture | Soil health, fertilizer inputs, crop yields |
 
-### Your Country
+### Your Country / Region
 
-Select your country — this adds local news sources (NYT, BBC, Le Monde, etc.) alongside the international wires.
+Select your country — this adds local news sources alongside the international wires.
+
+### Local Location
+
+Enter your **City**, **County**, and **State/Province**. This is used by the Local tab to collect community-specific news and generate a local risk briefing. City + State gives the best results. These fields save automatically when you click away from them.
 
 ---
 
@@ -181,262 +188,261 @@ Select your country — this adds local news sources (NYT, BBC, Le Monde, etc.) 
 
 ### Set the lookback period
 
-This only appears on first run. Choose how far back to search:
+Choose how far back to search:
 - **7–30 days** — quick test run, minimal data
 - **60–90 days** — good starting point for pattern detection
 - **6 months – 1 year** — comprehensive baseline
 
 ### How long the initial collection takes
 
-**The lookback period has much less effect on collection time than you'd expect.** The bottleneck is not the date range — it's the number of active topics multiplied by the number of keywords and query variants being searched. With all 15 topics active, the app is making hundreds of individual search requests regardless of whether you picked 7 days or 6 months.
-
-Rough timing estimates with all 15 topics active:
+The bottleneck is the number of active topics multiplied by keywords per topic, not the date range.
 
 | Source | Expected time | Rate limit risk |
 |---|---|---|
 | DuckDuckGo only | 15–40 minutes | Low |
-| GDELT only | 20–50 minutes + retry waits | High |
+| GDELT only | 20–50 minutes + retry waits | Medium |
 | Both | 45–120 minutes or more | Medium–High |
 
-These are real numbers. Let it run — the browser tab needs to stay open and active the whole time. Do not close or navigate away. The progress bar moves through 7 batches (topic groups) plus a journal pass at the end.
-
-**GDELT timing note:** When GDELT rate limits trigger, the app automatically waits before retrying (up to 5s, 10s, then 20s per failed query). This can add significant time to a collection run. If rate limiting is severe, some queries will be saved to the failed list for manual retry after the main run completes — this is normal and expected, not an error.
-
-**If you want a faster first run:** disable topics you care less about in the Tracked Topics grid before starting. Each disabled topic removes an entire batch or reduces a batch's keyword count. You can always re-enable topics and run again later — the deduplication system means you'll only collect articles you don't already have.
-
-> **First run tip:** Start with DuckDuckGo only and your most important topics enabled to verify everything works end-to-end. Then do follow-up runs with GDELT or the Historical picker to fill in coverage.
+The browser tab needs to stay open the whole time.
 
 ---
 
 ## Using the App
 
-The sidebar runs in this order: Monitor → Intake → Interrogate → Patterns → Maps → Thresholds → Local → Archive → Sources.
+The sidebar: **Monitor → Intake → Interrogate → Patterns → Thresholds → National → Local → Archive → Sources**
+
+---
 
 ### Monitor
-Overview dashboard. Shows total articles, active topics, active source count, and the 15 most recent articles. The **Overall Signal** indicator in the top-right card reflects your last Pattern Analysis run and persists across restarts.
+
+Overview dashboard. Shows total articles, active topics, source count, and the 15 most recent articles. The **Overall Signal** indicator reflects your last Pattern Analysis run and persists across restarts.
+
+---
 
 ### Intake
-Configure and run collections. See Step 7–8 above for full detail. Key sections:
+
+Configure and run collections. Key sections:
+
 - **Connection Settings** — server and LM Studio URLs, model name
 - **Ingest Source** — DuckDuckGo, GDELT, or Both
-- **Tracked Topics** — toggle any of the 15 topics on/off
-- **Date Window** — always visible; pick any window and run; deduplication handles the rest
-- **GDELT Historical Collection** — fetch a specific calendar month from GDELT back to February 2015
+- **Tracked Topics** — toggle any of the 15 topics
+- **Country Sources** — local and global outlet toggles per country
+- **Local Location** — City / County / State for the Local tab (saves on blur)
+- **Date Window** — lookback period with presets and custom days input
+- **GDELT Historical Collection** — fetch a specific calendar month back to February 2015
+
+---
 
 ### Interrogate
-Ask plain-English questions about your collected data. The LLM reads the 40 most relevant articles (scored by keyword overlap) and answers with citations like `[12]`. Today's date is injected into the prompt so the model uses article dates as its temporal reference rather than defaulting to its training cutoff.
 
-**Example questions that work well:**
+Ask plain-English questions about your collected data. The header shows exactly what you're querying — e.g. **`289 national`** (cyan) and **`47 local`** (green) — so you can see both article pools are always included. A topic dropdown lets you focus the context on a single sector for more specific answers.
+
+The LLM reads the 40 most relevant articles (scored by keyword overlap with your question) and answers with citations like `[12]`. Today's date is injected into the prompt so the model uses article dates as its reference rather than its training cutoff.
+
+**Example questions:**
 - *Which sector is collapsing fastest and what are the drivers?*
 - *What early warning signals appear across multiple sectors at once?*
 - *How are governance failures accelerating other collapse categories?*
-- *What water conflicts or shortages are emerging and where?*
-- *How is migration being driven by climate and conflict?*
+- *What water shortages or conflicts are emerging and where?*
+- *How are the local patterns in [your area] connecting to national trends?*
+
+---
 
 ### Patterns
-Runs a structured analysis across all 15 sectors. Produces collapse rates (0–100%), trend direction, signal levels, interconnections, leading indicators, emerging threats, and a dated event timeline. Results are saved and restored on restart — you don't need to re-run every session.
+
+Structured analysis across all 15 sectors. Produces collapse rates (0–100%), trend direction, signal levels, interconnections, leading indicators, emerging threats, and a dated event timeline. Results persist across restarts.
 
 **Interactive features:**
-- **Click any sector name or signal badge** to expand a 2-3 sentence explanation of why that signal level was assigned
-- **Click any Leading Indicator or Emerging Threat** to open an article drill-down panel showing the archive articles that support it, scored by relevance. Click again to close.
-- **Event Timeline** at the bottom shows key dated developments across sectors in chronological order
+- **Click any sector name** to expand the model's reasoning for that signal level
+- **Click any Leading Indicator or Emerging Threat** to open an article drill panel showing supporting articles scored by relevance. Click again to close.
+- **Event Timeline** shows key dated developments in chronological order
 
-**This view needs a capable model** — Qwen2.5-14B or Mistral-Nemo are recommended. Phi-3.5-mini may struggle to produce well-formed JSON consistently. If you get "Could not parse JSON", try again — it's probabilistic.
+This view needs a capable model — Qwen2.5-14B or Gemma-4-12B recommended.
 
-### Maps
-Three visualizations of your collected data:
-
-- **[·] Event Map** — every article plotted at its source outlet's geographic location, coloured by topic. Click any dot for the headline, source, date, and a link to the article. Covers sources across the US, UK, Europe, South America, Africa, Russia, Japan, India, Australia, and specialist outlets (Arctic, environment).
-- **[#] Risk Density** — countries sized by article volume, coloured by worst signal level from Pattern Analysis. Run Patterns first for signal colouring; otherwise all bubbles show green.
-- **[~] Sector Network** — the 15 sectors arranged in a circle. Node size = collapse rate. Border colour = signal level. Connecting lines show cross-sector relationships from Pattern Analysis (red = strong, orange = moderate, yellow = weak, dashed = weak).
-
-All three maps require collected articles. The Sector Network additionally requires a completed Pattern Analysis.
+---
 
 ### Thresholds
-Evaluates 12 planetary boundaries against their scientific thresholds using your LLM. Each indicator card always shows:
-- The scientific threshold value (what the science says the safe limit is)
-- **Why It Matters** — a fixed explanation of why this indicator is tracked, visible before any analysis is run
 
-After clicking **Run Threshold Assessment**:
-- Current known value/range for each indicator
-- Signal level (critical/elevated/moderate/low)
-- Trend direction
-- A 2-3 sentence assessment comparing current reality to the threshold
+Evaluates 12 planetary boundaries against scientific thresholds. Each card always shows the scientific threshold value and a plain-English explanation of why it matters — visible before any analysis runs.
+
+After clicking **Run Threshold Assessment**, each card shows: current known value, signal level, trend direction, and a 2-3 sentence assessment.
 
 The 12 indicators: Global Temperature, Greenhouse Gas Levels, Sea Level Rise, Ocean Heat Content, Ocean Acidity, Ice Sheets, Glaciers, Arctic Sea Ice, Snow Cover, Permafrost, Earth's Energy Balance, Precipitation & Drought Patterns.
 
-Results are saved to `data/thresholds.json` and restored on restart. Click **Refresh Thresholds** to update with a fresh assessment.
+Results save to `data/thresholds.json` and auto-populate on restart.
 
-### Local Monitor
-Generates a country-specific risk assessment for whichever country you selected in Intake → Your Country / Region. Analyses 8 sectors: Political Stability & Governance, Economic Health, Food & Water Security, Energy Infrastructure, Healthcare System, Climate Vulnerability, Social Cohesion, Supply Chain Resilience.
+---
 
-Each sector shows a collapse rate bar, signal badge, trend arrow, current status, and the most significant recent development. Three additional sections cover:
-- **Unique Risk Factors** — what makes this country specifically vulnerable that may not apply elsewhere
-- **Stabilizing Factors** — genuine buffers and strengths
-- **Watch Items** — specific upcoming events or thresholds to monitor
+### National
 
-If you switch countries after running an assessment, a warning banner appears with a prompt to refresh. Results saved to `data/local_monitor.json`.
+Country-specific risk assessment for the country selected in Intake. Two modes:
+
+**Full Briefing — All Topics:** Analyses 8 sectors (Political Stability & Governance, Economic Health, Food & Water Security, Energy Infrastructure, Healthcare System, Climate Vulnerability, Social Cohesion, Supply Chain Resilience). Each sector shows a collapse rate bar, signal badge, trend arrow, status, and key development. Also generates unique risk factors, stabilizing factors, and watch items specific to that country.
+
+**Deep Dive: [Topic]:** Focuses entirely on one of the 15 topics for that country. Returns a more detailed prompt with 6 topic-specific sub-sectors, actual data points and statistics, named events, a 6-12 month outlook, and 5 watch items. Uses 7,000 max tokens for more thorough output.
+
+Results save to `data/local_monitor.json` and auto-populate on restart.
+
+---
+
+### Local
+
+Community-level monitoring for your specific city, county, and state. Set your location in Intake → Local Location first.
+
+#### Collecting Local News
+
+The **Lookback** dropdown (7 days to 1 year) sets how far back to search. It locks after your first collection run — clear articles to change it. Click **[o] Collect Local News** to run a DuckDuckGo search combining your location with topic-specific community keywords:
+
+- General: `"Austin Texas" local news today`
+- Climate: `"Austin Texas" flooding`, `"Travis County" drought`
+- Infrastructure: `"Austin Texas" power outage`, `"Travis County" water main`
+- And so on across all active topics, 2 keywords per topic
+
+The article count badge in the header updates immediately after collection and shows dismissed articles separately: `47 local articles (3 dismissed)`.
+
+#### Local Archive
+
+Click **[= Local Archive]** to open the full article list. From here you can:
+
+- **Search** by title or source name
+- **Filter** by topic
+- **[x] Dismiss** any article — marks it as excluded. The URL is kept so it won't be re-fetched, but dismissed articles are filtered out of all analysis: briefings, drill panels, and Interrogate context
+- **[+ Restore]** to bring a dismissed article back
+- **Show dismissed** checkbox to review what you've excluded
+
+Use dismiss to remove articles that matched your location keywords but are clearly not actually local — national wire stories that mention your city in passing, for example.
+
+#### Local Briefing
+
+Two modes, same as National:
+
+**Full Briefing — All Topics:** 6 sectors (Infrastructure, Economy & Jobs, Food & Water, Energy, Public Health, Governance & Safety) with collapse rates, signal levels, trends, and developments. Plus local risk factors, 30-day watch items, community impacts, and a paragraph connecting local conditions to regional trends.
+
+**Deep Dive: [Topic]:** Focused deep analysis of one topic for your specific location. Asks the model to name specific local infrastructure, employers, water sources, and other concrete local details. Returns 5 risks, 5 watch items, 4 community impacts, 4 data points with numbers, and a trajectory outlook.
+
+Risk factors and watch items are **clickable** — clicking any item searches your local article archive and returns supporting articles in a drill panel, the same way Patterns does.
+
+Results save to `data/local_briefing.json` and auto-populate on restart.
+
+---
 
 ### Archive
-Full searchable article list. Filter by topic dropdown, search titles and snippets. Articles tagged `GDELT` came from the GDELT archive rather than DuckDuckGo.
+
+Full searchable archive of national and global articles. Filter by topic dropdown, search by title/snippet. Articles tagged `GDELT` came from the GDELT archive. Local articles are managed separately in the Local tab.
+
+---
 
 ### Sources
-Manage the news outlets the app searches. All sources are stored in `sources.json` in the app folder — your changes persist across app updates. Organized into tabs by category:
 
-- **Global / Intl** — wire services and international outlets (Reuters, AP, BBC, Al Jazeera, Deutsche Welle, and outlets covering South America, Africa, Russia/Ukraine, Arctic, and environment specialists)
-- **Journals** — scientific publications (Nature, Science, The Lancet, NEJM, PNAS)
-- **Country tabs** — local outlets per country (US, UK, Canada, Australia, Germany, France, India, Japan)
+Manage the news outlets the app searches. Sources are stored in `sources.json` and persist across app updates. Organized into tabs: Global/Intl, Journals, and one tab per country.
 
-To add a source: enter the display name and domain (e.g. `spiegel.de`), click **[+] Add**. To remove: click **[x] Remove** next to any entry. Changes save immediately. Removing a source stops it being used in future collections — existing articles stay in your archive.
+To add a source: enter the display name and domain (e.g. `spiegel.de`), click **[+] Add**. To remove: click **[x] Remove**. Changes save immediately. Removing a source stops future collection — existing articles stay in the archive.
 
 ---
 
 ## Recurring Collection
 
-The **Date Window** selector in Intake → Collection Run is always visible. Pick the window you want and click Collect — the deduplication system automatically skips anything already in your archive, so you can run the same window multiple times safely.
+The **Date Window** selector is always visible in Intake. The deduplication system skips anything already in your archive, so you can run the same window multiple times safely.
 
 **Common patterns:**
-- **Daily top-up** — select Today, click Collect. Fast with DuckDuckGo.
-- **Weekly catch-up** — select 7 days, click Collect.
-- **Adding a new topic** — enable the topic in Tracked Topics, select 90 days or more, click Collect. Only the new topic's articles come through since the others are already archived.
-- **Going back further** — select 6 months or 1 year and collect. Existing articles are skipped, only new ones are added.
-- **Specific historical month** — use the GDELT Historical Collection card at the bottom of Intake. Pick year and month, click Fetch. Coverage goes back to February 2015.
+- **Daily top-up** — select Today, click Collect
+- **Weekly catch-up** — select 7 days, click Collect
+- **Adding a new topic** — enable it, select 90 days or more, collect. Only the new topic's articles come through
+- **Going back further** — select 6 months or 1 year; existing articles are skipped
+- **Specific historical month** — use GDELT Historical Collection at the bottom of Intake. Coverage back to February 2015
 
-Click **[o] Collect** in the top bar (visible from any view except Intake) to jump straight to a collection run with your current settings.
+---
+
+## Data Files
+
+All data lives in the `data/` folder and is excluded from Git:
+
+| File | Contents |
+|---|---|
+| `articles.json` | National/global collected articles |
+| `settings.json` | Saved preferences, keywords, location, LM Studio config |
+| `failed_queries.json` | GDELT queries that exhausted retries |
+| `thresholds.json` | Saved planetary threshold assessment |
+| `local_monitor.json` | Saved national/country risk assessment |
+| `local_briefing.json` | Saved local community briefing |
+| `local_articles.json` | Local community articles (with dismissed flags) |
+
+Storage sizing runs roughly 10–18 MB per year of daily collection runs.
 
 ---
 
 ## Troubleshooting
 
 **Server shows OFFLINE**
-Make sure `server.py` is running. On Windows, check that the command window from `start.bat` is still open. On Mac/Linux, run `python3 server.py` in a terminal.
+Make sure `server.py` is running. On Windows, check that the command window from `start.bat` is still open.
 
 **LM Studio shows OFFLINE**
-Open LM Studio → Developer tab → click Start Server. Confirm a model is loaded in the dropdown at the top.
+Open LM Studio → Developer tab → enable CORS → click Start Server. Confirm a model is loaded in the dropdown.
 
-**"Could not parse JSON" in Patterns, Thresholds, or Local Monitor**
-The model struggled to produce valid JSON. Try again — it's probabilistic and often works on the second attempt. If it fails consistently, try a larger or more capable model. Qwen2.5-14B is the most reliable for structured output. Phi-3.5-mini will struggle with the complexity of these prompts.
+**"Could not parse JSON" in Patterns, Thresholds, National, or Local**
+The model struggled to produce valid JSON. Try again — it's probabilistic and usually works on the second attempt. If it fails consistently, try a larger model. Qwen2.5-14B is the most reliable for structured output.
 
 **Collection returns 0 articles**
-- DuckDuckGo may be rate-limiting — wait a few minutes and try again
-- Try switching to GDELT or Both in the Ingest Source setting
-- Check that at least one topic is enabled
+DuckDuckGo may be rate-limiting — wait a few minutes and try again. Check that at least one topic is enabled.
 
-**GDELT returns no results or fewer results than expected**
-GDELT is a free public API with no guaranteed uptime or rate limits. A few things to check:
-- Look at the server console window for `GDELT 429` messages — these mean you were rate-limited
-- Wait 5–10 minutes and try again — GDELT rate limits typically reset quickly
-- Switch to DuckDuckGo temporarily if GDELT is consistently unresponsive
-- Check `data/failed_queries.json` — any queries that exhausted all retries are saved there
+**GDELT 429 errors / red warning banner in Intake**
+Normal during large GDELT collections. The app saves failed queries to `data/failed_queries.json`. Click **[>] Rerun Failed** after waiting 5–10 minutes for the rate limit to reset. See the GDELT note under Step 7 for full detail.
 
-**Red "GDELT queries failed" banner appears in Intake**
-This is normal during large GDELT collections. The app saves every query that failed after all retry attempts to `data/failed_queries.json`. Options:
-- Click **[>] Rerun Failed** to replay them immediately. The app will retry each one with the same date window that was originally used.
-- Wait a few minutes first — GDELT rate limits reset and the retry is more likely to succeed
-- Click **[x] Dismiss** if you don't need those specific queries (they'll be removed from the list permanently)
-- The failed list persists across restarts, so you can close the app, come back later, and retry then
+**Local articles include irrelevant national stories**
+DuckDuckGo matches on keywords so national stories mentioning your city will sometimes appear. Open **[= Local Archive]** in the Local tab, find the irrelevant articles, and click **[x] Dismiss**. Dismissed articles are excluded from all briefings and analysis but retained so they won't be re-fetched.
 
-**Browser shows "React is not defined"**
-React is bundled inside the HTML file — this shouldn't happen if you're using the current version. Make sure you have the latest `collapse-monitor.html` from the repository.
+**Location fields reset after refresh**
+The city, county, and state fields save automatically when you click or tab away from them. If they're not persisting, make sure the server is running when you fill them in — the save requires a round-trip to `server.py`.
 
-**Maps tab shows 0 articles mapped**
-The Event Map matches article sources to geographic coordinates using outlet display names and domains. If you collected articles primarily from sources not in the built-in lookup (very regional or niche outlets), they may not map. Check the Archive tab to confirm articles were collected, then try adding those outlets in the Sources tab so the map recognizes them.
+**Local briefing doesn't reflect my location specifically**
+The briefing quality depends on having local articles collected. Run **[o] Collect Local News** first, then dismiss any clearly irrelevant results before running the briefing. More local articles = more specific output.
 
-**Maps tab crashes or Sector Network is empty**
-Make sure you have articles collected before opening Event Map or Risk Density. The Sector Network requires a completed Pattern Analysis run.
+**Thresholds or National shows stale data after switching country**
+A warning banner appears if the saved assessment is for a different country. Click **[^] Refresh** to regenerate.
 
 ---
 
 ## Context Windows and Token Limits
 
-This is the most important configuration detail to get right. If your model's context window is too small, the Interrogate and Patterns views will fail or return truncated garbage.
-
-### How the app uses your model
-
-The app makes two kinds of LM calls:
-
-**Interrogate view** — takes your question, scores every article in your archive by keyword relevance, picks the top 40, formats them as a numbered list (top 12 include the article snippet), and sends that block to the model along with your question. The model is asked to answer and cite articles by number.
-
-**Patterns view** — takes the 12 most recent articles per topic (up to 15 topics × 12 = 180 articles worth of titles and dates), plus a summary of totals per topic, then asks the model to return a structured JSON object covering all sectors.
-
-### Token estimates
-
-| Call | Input tokens | Output limit | Total needed |
+| Call | Approx input tokens | Max output | Total needed |
 |---|---|---|---|
-| Interrogate | ~2,200 | 3,000 | **~5,500** |
-| Patterns | ~4,000 | 4,000 | **~8,000** |
-| Thresholds | ~2,500 | 4,000 | **~6,500** |
-| Local Monitor | ~2,500 | 4,000 | **~6,500** |
+| Interrogate | ~2,500 | 3,000 | ~5,500 |
+| Patterns | ~4,500 | 8,000 | ~12,500 |
+| Thresholds | ~2,500 | 4,000 | ~6,500 |
+| National Full Briefing | ~2,500 | 5,000 | ~7,500 |
+| National Deep Dive | ~2,500 | 7,000 | ~9,500 |
+| Local Full Briefing | ~2,000 | 6,000 | ~8,000 |
+| Local Deep Dive | ~2,000 | 7,000 | ~9,000 |
 
-These are estimates assuming a moderate archive size. With thousands of articles the context stays capped — the app sends the top 40 articles for Interrogate, 12 per topic for Patterns, and the 20 most recent articles for Thresholds and Local Monitor.
-
-### Context window requirements by model
-
-| Model | Context window | Works? |
-|---|---|---|
-| Phi-3.5-mini | 4,096 | ⚠️ Too small — both views will fail or truncate |
-| Gemma-2-2B | 8,192 | ✓ Adequate for both views |
-| Gemma-2-9B | 8,192 | ✓ Adequate for both views |
-| Llama-3.1-8B | 8,192 | ✓ Adequate for both views |
-| Qwen2.5-14B | 32,768 | ✓ Plenty of headroom |
-| Mistral-Nemo | 128,000 | ✓ No constraint at all |
-
-### Setting the context window in LM Studio
-
-LM Studio defaults to a context window that may be smaller than the model's maximum. **You need to set this manually.**
-
-1. Open LM Studio
-2. Load your model
-3. Go to the **My Models** tab → click your loaded model
-4. Find **Context Length** (also called `n_ctx`) in the model settings panel
-5. Set it to at least **8,192** for any model that supports it
-6. For Qwen2.5-14B, set it to **16,384** or higher to give headroom
-7. Click **Apply** and reload the model if prompted
-
-> **Why LM Studio defaults low:** Larger context windows use more VRAM. LM Studio picks a conservative default to avoid out-of-memory errors. You'll need to raise it manually for this app to work correctly.
-
-### Setting max_tokens in the app
-
-The app sends `max_tokens: 3000` for Interrogate and `max_tokens: 4000` for Patterns, Thresholds, and Local Monitor. The higher limit for the structured views gives the model room to output complete JSON without truncation.
-
-If your model is cutting off responses mid-sentence or mid-JSON, the context window is the likely cause (the model ran out of room), not `max_tokens`. Fix the context window in LM Studio first.
-
-If you want to raise the output limits, search for `max_tokens` in `collapse-monitor.html` and adjust the values. Don't go above the model's actual context window minus the input size.
+Set your context window in LM Studio to at least **8,192** for all models. For Qwen2.5-14B, set **16,384** or higher. Patterns requires the most headroom — if it truncates, raise the context window first.
 
 ---
 
 ## Hardware Notes
 
-The app itself uses almost no resources — it's a local web page talking to a Python server. The only heavy component is LM Studio running the AI model.
-
 | RAM | Recommended setup |
 |---|---|
-| 8 GB | Gemma-2-2B (Q4). Limited analysis quality but works. Phi-3.5-mini has too small a context window for this app. |
-| 12 GB | Llama-3.1-8B or Gemma-2-9B at Q4 quantization. Good quality. |
-| 16 GB | Qwen2.5-14B or Mistral-Nemo. Best results. |
+| 8 GB | Gemma-2-2B (Q4). Limited quality but functional. |
+| 12 GB | Llama-3.1-8B or Gemma-2-9B at Q4. Good quality. |
+| 16 GB | Qwen2.5-14B, Gemma-4-12B, or Mistral-Nemo. Best results. |
 | 32 GB+ | Any model, including unquantized versions. |
 
-GPU acceleration: LM Studio automatically uses your GPU (NVIDIA CUDA or Apple Metal) if available. Analysis that takes 2–3 minutes on CPU takes 10–20 seconds with GPU acceleration.
+GPU acceleration: LM Studio automatically uses NVIDIA CUDA or Apple Metal if available. Analysis that takes 2–3 minutes on CPU takes 10–20 seconds with GPU.
 
 ---
 
 ## File Structure for GitHub
 
 ```
-.gitignore              ← exclude data/ folder (your articles stay local)
-README.md               ← this file
-collapse-monitor.html   ← entire UI, self-contained
-server.py               ← local web server + search + API backend
-requirements.txt        ← Python dependencies
-sources.json            ← editable news source list (ships with app)
-start.bat               ← Windows launcher
-start.sh                ← Mac/Linux launcher
-data/                   ← created automatically, excluded from Git
-    articles.json       ← your collected articles
-    settings.json       ← saved preferences and configuration
-    failed_queries.json ← GDELT queries that need retry
-    thresholds.json     ← saved planetary threshold assessments
-    local_monitor.json  ← saved country-specific risk assessment
+.gitignore
+README.md
+collapse-monitor.html   <- entire UI, self-contained single file
+server.py               <- local web server + search + collection backend
+requirements.txt        <- Python dependencies (flask, flask-cors, ddgs, requests)
+sources.json            <- editable news source list (ships with app)
+start.bat               <- Windows launcher
+start.sh                <- Mac/Linux launcher
+data/                   <- created automatically, excluded from Git
 ```
 
 Recommended `.gitignore`:
@@ -447,30 +453,14 @@ __pycache__/
 .DS_Store
 ```
 
-**`sources.json`** lives in the base folder (not `data/`) so it ships with the app as a versioned default. Your local edits to it via the Sources tab are saved back to the same file — they persist but are not tracked by Git, so pulling updates won't overwrite your customizations (Git only updates tracked files).
-
-The `data/` folder contains your personal archive and all generated analysis — keep it local and out of the repository.
+`sources.json` lives in the base folder so it ships with the app as a versioned default. Your edits via the Sources tab are saved back to the same file and persist — but since it's tracked by Git, pulling updates may overwrite local additions. Back up your customizations before pulling.
 
 ---
 
-**Thresholds or Local Monitor shows stale data after switching country**
-If you switch country in Intake after running a Local Monitor assessment, a warning banner appears on the Local tab. Click **[^] Refresh** to generate a new assessment for the selected country. The old data is replaced.
-
-**Thresholds assessment seems out of date**
-The assessment reflects the LLM's knowledge as of its training cutoff, supplemented by your collected articles. For the most current values, ensure you have recent articles collected (past 30–90 days) before running the assessment, and include climate-related topics in your active collection.
-
 ## Contributing and Feedback
 
-Bug reports, feature requests, and questions are welcome through **GitHub Issues**.
+Bug reports, feature requests, and questions are welcome through **GitHub Issues** at `https://github.com/b2futures/collapse-monitor/issues`.
 
-**To report a bug:** open an issue and include:
-- What you were doing when it happened
-- What you expected vs what actually occurred
-- Any error messages from the browser console (F12 → Console) or the server window
-- Your OS, Python version, and which model you're running in LM Studio
+**To report a bug:** include what you were doing, what you expected vs what happened, any error messages from the browser console (F12 → Console) or the server window, your OS, Python version, and which model you're running.
 
-**To request a feature or topic:** open an issue describing what you'd like and why. New collapse categories, additional news sources, UI improvements, and analysis enhancements are all fair game.
-
-**To ask a question:** open an issue with the Question label. If you figured out the answer yourself, feel free to close it with a comment explaining the fix — it helps the next person who hits the same thing.
-
-GitHub Issues: `https://github.com/b2futures/collapse-monitor/issues`
+**To request a feature:** open an issue describing what you'd like and why.

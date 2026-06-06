@@ -21,6 +21,8 @@ FAILED_QUERIES_FILE = os.path.join(DATA_DIR, "failed_queries.json")
 SOURCES_FILE        = os.path.join(BASE_DIR, "sources.json")  # ships with the app, user-editable
 THRESHOLDS_FILE     = os.path.join(DATA_DIR, "thresholds.json")
 LOCAL_MONITOR_FILE  = os.path.join(DATA_DIR, "local_monitor.json")
+LOCAL_BRIEFING_FILE  = os.path.join(DATA_DIR, "local_briefing.json")
+LOCAL_ARTICLES_FILE  = os.path.join(DATA_DIR, "local_articles.json")
 
 # -- Topic-aware query variant templates -----------------------
 TOPIC_VARIANTS = {
@@ -63,7 +65,7 @@ def gdelt_timelimit(from_date_str):
         return None
 
 # Minimum seconds between GDELT requests to avoid 429s
-GDELT_REQUEST_DELAY = 10.0
+GDELT_REQUEST_DELAY = 2.0
 _gdelt_last_request = 0.0
 
 
@@ -96,8 +98,8 @@ def fetch_gdelt(query, from_date_str, max_results=250, to_date_str=None):
 
     req_url = GDELT_API + "?" + urllib.parse.urlencode(params)
 
-    max_retries = 3
-    backoff     = 30.0  # initial backoff seconds; doubles each retry
+    max_retries = 4
+    backoff     = 5.0   # initial backoff seconds; doubles each retry
 
     for attempt in range(max_retries):
         # Enforce minimum spacing between requests
@@ -112,7 +114,7 @@ def fetch_gdelt(query, from_date_str, max_results=250, to_date_str=None):
             )
             _gdelt_last_request = time.time()
             with urllib.request.urlopen(req, timeout=20) as resp:
-                raw = resp.read().decode("utf-8").strip()
+                data = json.loads(resp.read().decode("utf-8"))
 
         except urllib.error.HTTPError as e:
             _gdelt_last_request = time.time()
@@ -120,8 +122,6 @@ def fetch_gdelt(query, from_date_str, max_results=250, to_date_str=None):
                 wait = backoff * (2 ** attempt)
                 print(f"GDELT {e.code} on attempt {attempt+1}/{max_retries} "
                       f"for '{query[:60]}' — waiting {wait:.0f}s")
-                if attempt == max_retries - 1:
-                    return [], f"GDELT 429: rate-limited for '{query[:60]}'"
                 time.sleep(wait)
                 continue
             return [], f"HTTP {e.code}: {e.reason}"
@@ -130,20 +130,10 @@ def fetch_gdelt(query, from_date_str, max_results=250, to_date_str=None):
             _gdelt_last_request = time.time()
             if attempt < max_retries - 1:
                 wait = backoff * (2 ** attempt)
-                print(f"GDELT network error attempt {attempt+1}/{max_retries}: {e} — retrying in {wait:.0f}s")
+                print(f"GDELT error attempt {attempt+1}/{max_retries}: {e} — retrying in {wait:.0f}s")
                 time.sleep(wait)
                 continue
             return [], str(e)
-
-        # Empty body = no results for this query, not an error worth retrying
-        if not raw:
-            return [], None
-
-        # Non-JSON body (HTML error page etc) = treat as no results
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError:
-            return [], None
 
         # Success — parse articles
         articles = []
@@ -306,6 +296,154 @@ def save_local_monitor():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+
+
+@app.route("/local-articles", methods=["GET"])
+def get_local_articles():
+    try:
+        if os.path.exists(LOCAL_ARTICLES_FILE):
+            with open(LOCAL_ARTICLES_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return jsonify({"articles": data, "count": len(data)})
+    except Exception:
+        pass
+    return jsonify({"articles": [], "count": 0})
+
+@app.route("/local-articles", methods=["POST"])
+def save_local_articles():
+    data = request.get_json() or {}
+    articles = data.get("articles", [])
+    try:
+        with open(LOCAL_ARTICLES_FILE, "w", encoding="utf-8") as f:
+            json.dump(articles, f, indent=2, ensure_ascii=False)
+        return jsonify({"ok": True, "count": len(articles)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/local-briefing", methods=["GET"])
+def get_local_briefing():
+    try:
+        if os.path.exists(LOCAL_BRIEFING_FILE):
+            with open(LOCAL_BRIEFING_FILE, "r", encoding="utf-8") as f:
+                return jsonify(json.load(f))
+    except Exception:
+        pass
+    return jsonify({})
+
+@app.route("/local-briefing", methods=["POST"])
+def save_local_briefing():
+    data = request.get_json() or {}
+    try:
+        with open(LOCAL_BRIEFING_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+# Local topic keyword map for community-level searches
+LOCAL_TOPIC_QUERIES = {
+    "climate":        ["flooding","wildfire","drought","extreme weather","storm damage","heat emergency"],
+    "disease":        ["outbreak","health alert","disease spread","hospital surge"],
+    "manufacturing":  ["factory closing","plant layoffs","industrial jobs","manufacturing"],
+    "trade":          ["supply shortage","prices rising","store closures","supply chain"],
+    "food":           ["food bank","food insecurity","hunger","grocery shortage","farm"],
+    "energy":         ["power outage","blackout","utility rates","electricity grid"],
+    "finance":        ["budget deficit","unemployment","housing costs","foreclosure","debt"],
+    "infrastructure": ["bridge repair","road failure","water main","sewer overflow","infrastructure"],
+    "governance":     ["city council","county government","election","policy","budget cuts"],
+    "water":          ["water quality","drought","water supply","reservoir","well"],
+    "migration":      ["homelessness","housing shortage","population","displacement"],
+    "conflict":       ["crime","violence","protest","civil unrest"],
+    "health_systems": ["hospital","clinic","healthcare access","emergency room"],
+    "tech_ai":        ["broadband","internet access","technology"],
+    "agriculture":    ["crop failure","farm","agriculture","livestock","irrigation"],
+}
+
+@app.route("/collect-local", methods=["POST"])
+def collect_local():
+    """Collect news for a specific city/county/state."""
+    data      = request.get_json() or {}
+    city      = (data.get("city")   or "").strip()
+    county    = (data.get("county") or "").strip()
+    state     = (data.get("state")  or "").strip()
+    from_date = data.get("fromDate", "")
+    topics    = data.get("topics",  [])   # list of topicIds; empty = all
+
+    # Build location strings
+    if city and state:
+        loc_primary = city + " " + state
+        loc_secondary = (county + " County " + state) if county else state
+    elif county and state:
+        loc_primary = county + " County " + state
+        loc_secondary = state
+    elif state:
+        loc_primary = state
+        loc_secondary = state
+    else:
+        return jsonify({"error": "No location specified", "articles": [], "count": 0}), 400
+
+    active_tids = topics if topics else list(LOCAL_TOPIC_QUERIES.keys())
+    timelimit   = ddg_timelimit(from_date)
+    articles    = []
+    seen_urls   = set()
+
+    def add_result(r, tid, location_str):
+        url = r.get("url", "")
+        if not url or url in seen_urls:
+            return
+        seen_urls.add(url)
+        date_str = parse_date(r.get("date", ""))
+        if from_date and date_str and date_str < from_date:
+            return
+        articles.append({
+            "id":           "loc-" + str(abs(hash(url)))[-8:],
+            "title":        r.get("title", ""),
+            "url":          url,
+            "source":       r.get("source", extract_domain(url)),
+            "date":         date_str,
+            "snippet":      (r.get("body") or "")[:300],
+            "topicId":      tid,
+            "type":         "news",
+            "region":       "local",
+            "location":     location_str,
+            "fetchedAt":    datetime.now(timezone.utc).isoformat(),
+            "ingestSource": "ddg",
+        })
+
+    try:
+        with DDGS() as ddgs:
+            # General local news pass
+            for q in [loc_primary + " news", loc_primary + " local news today"]:
+                try:
+                    for r in (ddgs.news(q, timelimit=timelimit, max_results=8) or []):
+                        add_result(r, "governance", loc_primary)
+                except Exception as e:
+                    print(f"Local DDG error '{q}': {e}")
+                time.sleep(GDELT_REQUEST_DELAY / 5)
+
+            # Topic-specific passes
+            for tid in active_tids:
+                kws = LOCAL_TOPIC_QUERIES.get(tid, [])
+                for kw in kws[:2]:          # 2 keywords per topic
+                    for loc in [loc_primary, loc_secondary]:
+                        q = loc + " " + kw
+                        try:
+                            for r in (ddgs.news(q, timelimit=timelimit, max_results=5) or []):
+                                add_result(r, tid, loc_primary)
+                        except Exception as e:
+                            print(f"Local DDG error '{q}': {e}")
+                        time.sleep(GDELT_REQUEST_DELAY / 5)
+                        if loc == loc_primary and loc_primary == loc_secondary:
+                            break   # same string, skip duplicate pass
+
+    except Exception as e:
+        return jsonify({"error": str(e), "articles": [], "count": 0}), 500
+
+    return jsonify({"articles": articles, "count": len(articles)})
+
+
 @app.route("/load")
 def load():
     return jsonify({"articles": load_articles(), "settings": load_settings()})
@@ -386,7 +524,7 @@ def collect():
 
                 # ---- GDELT passes ----
                 if source in ("gdelt", "both"):
-                    for base_query in variants[:1]:   # GDELT: base query only — reduce request volume
+                    for base_query in variants[:2]:   # GDELT: base + year variant only (more precise)
                         gdelt_arts, err = fetch_gdelt(base_query, from_date, max_results=20)
                         if err:
                             print(f"GDELT error for '{base_query}': {err}")
@@ -451,7 +589,7 @@ def collect_historical():
             tid      = topic_map.get(kw, topic_id)
             variants = build_variants(kw, tid)
 
-            for base_query in variants[:1]:   # base query only — reduce request volume
+            for base_query in variants[:2]:   # base + year-tagged only for archive
                 gdelt_arts, err = fetch_gdelt(
                     base_query, from_date,
                     max_results=250,
