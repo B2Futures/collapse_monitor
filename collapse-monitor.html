@@ -1558,7 +1558,14 @@ function App() {
         fetch(srvUrl+'/local-briefing').then(function(r){return r.json();})
           .then(function(d){if(d&&d.updatedAt) setLocalBriefing(d);}).catch(function(){});
         fetch(srvUrl+'/local-articles').then(function(r){return r.json();})
-          .then(function(d){if(d&&d.articles&&d.articles.length){setLocalArts(d.articles);setLocalLastRun(new Date());}}).catch(function(){});
+          .then(function(d){
+            if(d&&d.articles&&d.articles.length){
+              setLocalArts(d.articles);
+              // Use most recent fetchedAt from saved articles, not current time
+              var dates=d.articles.map(function(a){return a.fetchedAt||'';}).filter(Boolean).sort();
+              if(dates.length) setLocalLastRun(new Date(dates[dates.length-1]));
+            }
+          }).catch(function(){});
         fetch(srvUrl+'/local-briefing').then(function(r){return r.json();})
           .then(function(d){if(d&&d.updatedAt) setLocalBriefing(d);}).catch(function(){});
       })
@@ -3355,9 +3362,8 @@ function App() {
       return;
     }
     setLocalCollecting(true); setLocalCollMsg('Searching local news...'); setErr('');
-    var from = localLastRun
-      ? new Date(localLastRun).toISOString().split('T')[0]
-      : new Date(Date.now() - localLookback*86400000).toISOString().split('T')[0];
+    // Always search the full lookback window — dedup skips already-collected URLs
+    var from = new Date(Date.now() - localLookback*86400000).toISOString().split('T')[0];
     fetch(srvUrl+'/collect-local',{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({city:localCity,county:localCounty,state:localState,fromDate:from,topics:Array.from(actTop)})
@@ -3372,11 +3378,17 @@ function App() {
         return prev.concat(newA.filter(function(a){return a.url&&!ex.has(a.url);}));
       })(localArts);
       setLocalArts(merged);
-      setLocalLastRun(new Date());
-      setLocalCollMsg('Collected '+newA.length+' new -- '+merged.length+' total local articles.');
+      var runTime = new Date();
+      setLocalLastRun(runTime);
+      // Stamp merged articles with fetchedAt so it survives reload
+      var stamped = merged.map(function(a){
+        return a.fetchedAt ? a : Object.assign({},a,{fetchedAt:runTime.toISOString()});
+      });
+      setLocalArts(stamped);
+      setLocalCollMsg('Collected '+newA.length+' new -- '+stamped.length+' total local articles.');
       setTimeout(function(){setLocalCollMsg('');},4000);
       fetch(srvUrl+'/local-articles',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({articles:merged})});
+        body:JSON.stringify({articles:stamped})});
     })
     .catch(function(e){setErr('Collect error: '+e.message+' -- Is server.py running?');})
     .finally(function(){setLocalCollecting(false);});
@@ -3482,8 +3494,8 @@ function App() {
           h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--muted)',letterSpacing:'1px'}},'LOOKBACK:'),
           h('select',{className:'inp',style:{width:'110px',padding:'4px 8px',fontSize:'11px'},
             value:localLookback,
-            onChange:function(e){if(!localLastRun) setLocalLookback(parseInt(e.target.value,10));},
-            title:localLastRun?'Clear articles to change lookback':'Select how far back to search'},
+            onChange:function(e){setLocalLookback(parseInt(e.target.value,10));},
+            title:'Select how far back to search — deduplication skips already-collected articles'},
             [{l:'7 days',d:7},{l:'30 days',d:30},{l:'60 days',d:60},{l:'90 days',d:90},{l:'6 months',d:180},{l:'1 year',d:365}]
               .map(function(opt){return h('option',{key:opt.d,value:opt.d},opt.l);})),
           h('button',{className:'btn btn-sm',disabled:localCollecting,onClick:collectLocalNews},

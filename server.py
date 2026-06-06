@@ -369,40 +369,44 @@ def collect_local():
     county    = (data.get("county") or "").strip()
     state     = (data.get("state")  or "").strip()
     from_date = data.get("fromDate", "")
-    topics    = data.get("topics",  [])   # list of topicIds; empty = all
+    topics    = data.get("topics",  [])
 
-    # Build location strings
-    if city and state:
-        loc_primary = city + " " + state
-        loc_secondary = (county + " County " + state) if county else state
-    elif county and state:
-        loc_primary = county + " County " + state
-        loc_secondary = state
-    elif state:
-        loc_primary = state
-        loc_secondary = state
-    else:
+    if not city and not county and not state:
         return jsonify({"error": "No location specified", "articles": [], "count": 0}), 400
 
-    active_tids = topics if topics else list(LOCAL_TOPIC_QUERIES.keys())
-    timelimit   = ddg_timelimit(from_date)
-    articles    = []
-    seen_urls   = set()
+    # Build location strings — prefer most specific available
+    if city and state:
+        loc_primary   = city + " " + state
+        loc_county    = (county + " County " + state) if county else state
+        loc_state     = state
+    elif county and state:
+        loc_primary   = county + " County " + state
+        loc_county    = loc_primary
+        loc_state     = state
+    else:
+        loc_primary   = state
+        loc_county    = state
+        loc_state     = state
+
+    # Use the lookback window; fall back to past month
+    timelimit = ddg_timelimit(from_date) if from_date else "m"
+    print(f"[local-collect] location='{loc_primary}' timelimit='{timelimit}' from_date='{from_date}'")
+
+    articles  = []
+    seen_urls = set()
+    SLEEP     = 1.5   # conservative delay per query
 
     def add_result(r, tid, location_str):
         url = r.get("url", "")
         if not url or url in seen_urls:
             return
         seen_urls.add(url)
-        date_str = parse_date(r.get("date", ""))
-        if from_date and date_str and date_str < from_date:
-            return
         articles.append({
             "id":           "loc-" + str(abs(hash(url)))[-8:],
             "title":        r.get("title", ""),
             "url":          url,
             "source":       r.get("source", extract_domain(url)),
-            "date":         date_str,
+            "date":         parse_date(r.get("date", "")),
             "snippet":      (r.get("body") or "")[:300],
             "topicId":      tid,
             "type":         "news",
@@ -412,35 +416,49 @@ def collect_local():
             "ingestSource": "ddg",
         })
 
+    active_tids = topics if topics else list(LOCAL_TOPIC_QUERIES.keys())
+
+    # Build a deduplicated, prioritised query list — keep total queries manageable
+    queries = []
+
+    # 1. General local news (broadest coverage, highest priority)
+    queries.append((loc_primary + " news",       "governance", loc_primary))
+    if loc_county != loc_primary:
+        queries.append((loc_county + " news",    "governance", loc_primary))
+
+    # 2. One keyword per topic using primary location only (not doubled by county)
+    for tid in active_tids:
+        kws = LOCAL_TOPIC_QUERIES.get(tid, [])
+        if kws:
+            queries.append((loc_primary + " " + kws[0], tid, loc_primary))
+
+    # 3. Second keyword pass for high-signal topics only
+    HIGH_SIG = {"water", "energy", "infrastructure", "health_systems", "food", "governance"}
+    for tid in active_tids:
+        if tid in HIGH_SIG:
+            kws = LOCAL_TOPIC_QUERIES.get(tid, [])
+            if len(kws) > 1:
+                queries.append((loc_primary + " " + kws[1], tid, loc_primary))
+
+    print(f"[local-collect] running {len(queries)} queries")
+
     try:
         with DDGS() as ddgs:
-            # General local news pass
-            for q in [loc_primary + " news", loc_primary + " local news today"]:
+            for q, tid, loc_str in queries:
                 try:
-                    for r in (ddgs.news(q, timelimit=timelimit, max_results=8) or []):
-                        add_result(r, "governance", loc_primary)
+                    results = list(ddgs.news(q, timelimit=timelimit, max_results=8) or [])
+                    print(f"[local-collect] '{q}' -> {len(results)} results")
+                    for r in results:
+                        add_result(r, tid, loc_str)
                 except Exception as e:
-                    print(f"Local DDG error '{q}': {e}")
-                time.sleep(GDELT_REQUEST_DELAY / 5)
-
-            # Topic-specific passes
-            for tid in active_tids:
-                kws = LOCAL_TOPIC_QUERIES.get(tid, [])
-                for kw in kws[:2]:          # 2 keywords per topic
-                    for loc in [loc_primary, loc_secondary]:
-                        q = loc + " " + kw
-                        try:
-                            for r in (ddgs.news(q, timelimit=timelimit, max_results=5) or []):
-                                add_result(r, tid, loc_primary)
-                        except Exception as e:
-                            print(f"Local DDG error '{q}': {e}")
-                        time.sleep(GDELT_REQUEST_DELAY / 5)
-                        if loc == loc_primary and loc_primary == loc_secondary:
-                            break   # same string, skip duplicate pass
+                    print(f"[local-collect] DDG error '{q}': {e}")
+                time.sleep(SLEEP)
 
     except Exception as e:
+        print(f"[local-collect] DDGS init error: {e}")
         return jsonify({"error": str(e), "articles": [], "count": 0}), 500
 
+    print(f"[local-collect] done — {len(articles)} articles collected")
     return jsonify({"articles": articles, "count": len(articles)})
 
 
