@@ -1937,7 +1937,11 @@ function App() {
     if (drillQuery===label) { setDrillQuery(null); setDrillArts([]); return; }
     setDrillQuery(label);
     var words = label.toLowerCase().split(/\s+/).filter(function(w){return w.length>3;});
-    var drillPool = (view==='local') ? localArts.filter(function(a){return !a.dismissed;}).concat(arts) : arts;
+    // Local tab: drill only against local articles — national articles are irrelevant
+    // and can't be dismissed from Local Archive, causing confusion
+    var drillPool = (view==='local')
+      ? localArts.filter(function(a){return !a.dismissed;})
+      : arts;
     var scored = drillPool.map(function(a){
       var t=(a.title||'').toLowerCase(), sn=(a.snippet||'').toLowerCase(), sc=0;
       words.forEach(function(w){if(t.includes(w))sc+=3; if(sn.includes(w))sc+=1;});
@@ -2459,7 +2463,16 @@ function App() {
                   a.region==='global'&&h('span',{className:'tag tag-g'},'INTL'),
                   a.ingestSource==='gdelt'&&h('span',{className:'tag',style:{background:'rgba(100,200,100,.08)',borderColor:'rgba(100,200,100,.3)',color:'#6fcc6f'}},'GDELT')),
                 a.snippet&&h('div',{className:'asnip'},a.snippet),
-                a.url&&h('a',{href:a.url,target:'_blank',rel:'noopener noreferrer',className:'alink'},'[->] '+(a.url.length>65?a.url.slice(0,65)+'...':a.url)));
+                h('div',{style:{display:'flex',alignItems:'center',gap:'8px',marginTop:'3px'}},
+                  a.url&&h('a',{href:a.url,target:'_blank',rel:'noopener noreferrer',className:'alink',
+                    style:{flex:1,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},
+                    '[->] '+(a.url.length>65?a.url.slice(0,65)+'...':a.url)),
+                  view==='local'&&a.region==='local'&&
+                    h('button',{className:'btn btn-sm',
+                      style:{fontSize:'10px',padding:'2px 6px',flexShrink:0,
+                        color:'rgba(255,45,74,.8)',borderColor:'rgba(255,45,74,.35)'},
+                      onClick:function(){dismissLocalArt(a.url);setDrillQuery(null);setDrillArts([]);}},
+                      '[x] Dismiss')));
             })));
   }
 
@@ -2524,7 +2537,9 @@ function App() {
           onClick:function(){setDrillQuery(null);setDrillArts([]);}}, '[x] close')),
       drillArts.length===0
         ? h('div',{style:{fontSize:'12px',color:'var(--dim)',fontFamily:'var(--m)',padding:'8px 0'}},
-            'No matching articles found in archive. Try collecting more data on this topic.')
+            view==='local'
+            ? 'No local articles matched this risk factor. Collect more local news or check the Local Archive.'
+            : 'No matching articles found in archive. Try collecting more data on this topic.')
         : h('div',{className:'alist',style:{maxHeight:'320px',overflowY:'auto'}},
             drillArts.map(function(a){
               var atp=topicFor(a.topicId);
