@@ -1819,7 +1819,7 @@ function App() {
       +'timeline: 6-10 entries in chronological order covering the most significant recent developments across all sectors.\n'
       +'leadingIndicators and emergingThreats: Be specific — name regions, quantities, trends, not vague generalities.\n'
       +'Include ALL 15 topics: climate,disease,manufacturing,trade,food,energy,finance,infrastructure,governance,water,migration,conflict,health_systems,tech_ai,agriculture.';
-    callLM(sys,prompt,3000)
+    callLM(sys,prompt,8000)
       .then(function(txt){var p=parseJson(txt); if(p){setTrend(p); saveSrv(arts,{trend:p});} else setErr('Could not parse JSON. Try again.');})
       .catch(function(e){setErr('LM Studio error: '+e.message);})
       .finally(function(){setAnalyzing(false);});
