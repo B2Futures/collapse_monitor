@@ -3366,7 +3366,11 @@ function App() {
     var from = new Date(Date.now() - localLookback*86400000).toISOString().split('T')[0];
     fetch(srvUrl+'/collect-local',{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({city:localCity,county:localCounty,state:localState,fromDate:from,topics:Array.from(actTop)})
+      body:JSON.stringify({
+        city:localCity, county:localCounty, state:localState,
+        fromDate:from, topics:Array.from(actTop),
+        keywords:kws.map(function(k){return {kw:k.kw||k, topicId:k.topicId||'governance'};})
+      })
     })
     .then(function(r){return r.json();})
     .then(function(d){
