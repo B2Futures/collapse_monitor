@@ -391,7 +391,7 @@ def collect_local():
 
     articles  = []
     seen_urls = set()
-    SLEEP     = 2.0   # seconds between queries
+    SLEEP     = 1.5   # seconds between queries
 
     def add_result(r, tid):
         url = r.get("url", "")
@@ -417,7 +417,7 @@ def collect_local():
         """Run one DDG query in its own session to avoid timeout accumulation."""
         try:
             with DDGS() as ddgs:
-                results = list(ddgs.news(q, timelimit=timelimit, max_results=10) or [])
+                results = list(ddgs.news(q, timelimit=timelimit, max_results=10, timeout=10) or [])
             print(f"[local] '{q}' -> {len(results)} results")
             for r in results:
                 add_result(r, tid)
