@@ -1265,6 +1265,54 @@ var JSRC = [
   {id:'pnas',   name:'PNAS',       domain:'pnas.org'},
 ];
 
+var DEFAULT_KEYWORDS=[
+  {kw:'climate change',topicId:'climate'},{kw:'extreme weather',topicId:'climate'},
+  {kw:'flooding',topicId:'climate'},{kw:'drought',topicId:'climate'},
+  {kw:'wildfire',topicId:'climate'},{kw:'sea level rise',topicId:'climate'},
+  {kw:'heatwave',topicId:'climate'},{kw:'hurricane damage',topicId:'climate'},
+  {kw:'disease outbreak',topicId:'disease'},{kw:'pandemic risk',topicId:'disease'},
+  {kw:'infectious disease',topicId:'disease'},{kw:'pathogen spread',topicId:'disease'},
+  {kw:'WHO health alert',topicId:'disease'},{kw:'epidemic',topicId:'disease'},
+  {kw:'factory closure',topicId:'manufacturing'},{kw:'manufacturing jobs',topicId:'manufacturing'},
+  {kw:'industrial output decline',topicId:'manufacturing'},{kw:'plant layoffs',topicId:'manufacturing'},
+  {kw:'tariffs',topicId:'trade'},{kw:'trade war',topicId:'trade'},
+  {kw:'supply chain disruption',topicId:'trade'},{kw:'port congestion',topicId:'trade'},
+  {kw:'export controls',topicId:'trade'},{kw:'shipping delays',topicId:'trade'},
+  {kw:'food insecurity',topicId:'food'},{kw:'crop failure',topicId:'food'},
+  {kw:'famine',topicId:'food'},{kw:'food prices rising',topicId:'food'},
+  {kw:'food supply shortage',topicId:'food'},{kw:'agricultural collapse',topicId:'food'},
+  {kw:'power grid failure',topicId:'energy'},{kw:'blackout',topicId:'energy'},
+  {kw:'energy crisis',topicId:'energy'},{kw:'natural gas shortage',topicId:'energy'},
+  {kw:'grid stability',topicId:'energy'},{kw:'oil price spike',topicId:'energy'},
+  {kw:'bank failure',topicId:'finance'},{kw:'debt crisis',topicId:'finance'},
+  {kw:'recession',topicId:'finance'},{kw:'financial collapse',topicId:'finance'},
+  {kw:'inflation',topicId:'finance'},{kw:'currency crisis',topicId:'finance'},
+  {kw:'infrastructure failure',topicId:'infrastructure'},{kw:'bridge collapse',topicId:'infrastructure'},
+  {kw:'water main break',topicId:'infrastructure'},{kw:'aging infrastructure',topicId:'infrastructure'},
+  {kw:'grid breakdown',topicId:'infrastructure'},{kw:'sewer overflow',topicId:'infrastructure'},
+  {kw:'political instability',topicId:'governance'},{kw:'election interference',topicId:'governance'},
+  {kw:'authoritarian crackdown',topicId:'governance'},{kw:'government corruption',topicId:'governance'},
+  {kw:'democracy decline',topicId:'governance'},{kw:'coup',topicId:'governance'},
+  {kw:'water shortage',topicId:'water'},{kw:'aquifer depletion',topicId:'water'},
+  {kw:'water pollution',topicId:'water'},{kw:'freshwater crisis',topicId:'water'},
+  {kw:'water rights conflict',topicId:'water'},{kw:'reservoir levels',topicId:'water'},
+  {kw:'refugee crisis',topicId:'migration'},{kw:'mass displacement',topicId:'migration'},
+  {kw:'border crisis',topicId:'migration'},{kw:'internally displaced',topicId:'migration'},
+  {kw:'housing shortage',topicId:'migration'},
+  {kw:'military escalation',topicId:'conflict'},{kw:'geopolitical tension',topicId:'conflict'},
+  {kw:'civil war',topicId:'conflict'},{kw:'sanctions',topicId:'conflict'},
+  {kw:'territorial dispute',topicId:'conflict'},{kw:'arms buildup',topicId:'conflict'},
+  {kw:'hospital capacity',topicId:'health_systems'},{kw:'healthcare collapse',topicId:'health_systems'},
+  {kw:'drug shortage',topicId:'health_systems'},{kw:'medical supply chain',topicId:'health_systems'},
+  {kw:'insurance crisis',topicId:'health_systems'},
+  {kw:'cyberattack infrastructure',topicId:'tech_ai'},{kw:'semiconductor shortage',topicId:'tech_ai'},
+  {kw:'internet outage',topicId:'tech_ai'},{kw:'AI risk',topicId:'tech_ai'},
+  {kw:'data center energy',topicId:'tech_ai'},{kw:'critical infrastructure hack',topicId:'tech_ai'},
+  {kw:'soil degradation',topicId:'agriculture'},{kw:'fertilizer shortage',topicId:'agriculture'},
+  {kw:'crop yield decline',topicId:'agriculture'},{kw:'farming crisis',topicId:'agriculture'},
+  {kw:'food production collapse',topicId:'agriculture'},{kw:'livestock disease',topicId:'agriculture'}
+];
+
 var TOPICS = [
   {id:'climate',        label:'Climate & Weather',      color:'#00b4d8',
    keywords:['climate change','extreme weather','flooding','drought','wildfire','sea level rise','heatwave','global warming']},
@@ -1470,6 +1518,16 @@ function App() {
   var _localArcFilter   = useState('all'); var localArcFilter = _localArcFilter[0], setLocalArcFilter = _localArcFilter[1];
   var _localArcSearch   = useState('');    var localArcSearch = _localArcSearch[0], setLocalArcSearch = _localArcSearch[1];
   var _localArcShowDism = useState(false); var localArcShowDism = _localArcShowDism[0], setLocalArcShowDism = _localArcShowDism[1];
+  // Keywords tab state
+  var _kwFilter   = useState('all');     var kwFilter = _kwFilter[0],   setKwFilter   = _kwFilter[1];
+  var _kwSearch   = useState('');        var kwSearch = _kwSearch[0],   setKwSearch   = _kwSearch[1];
+  var _kwNewText  = useState('');        var kwNewText = _kwNewText[0], setKwNewText  = _kwNewText[1];
+  var _kwNewTopic = useState('climate'); var kwNewTopic = _kwNewTopic[0],setKwNewTopic = _kwNewTopic[1];
+  var _bulkText   = useState('');        var bulkText = _bulkText[0],   setBulkText   = _bulkText[1];
+  var _bulkTopic  = useState('climate'); var bulkTopic = _bulkTopic[0], setBulkTopic  = _bulkTopic[1];
+  var _showBulk   = useState(false);     var showBulk = _showBulk[0],   setShowBulk   = _showBulk[1];
+  var _kwEditIdx  = useState(-1);        var kwEditIdx = _kwEditIdx[0],  setKwEditIdx  = _kwEditIdx[1];
+  var _kwEditText = useState('');        var kwEditText = _kwEditText[0],setKwEditText = _kwEditText[1];
   var _localCity      = useState('');      var localCity = _localCity[0], setLocalCity = _localCity[1];
   var _localCounty    = useState('');      var localCounty = _localCounty[0], setLocalCounty = _localCounty[1];
   var _localState     = useState('');      var localState = _localState[0], setLocalState = _localState[1];
@@ -1510,7 +1568,31 @@ function App() {
     return Object.entries(c).sort(function(a,b){return b[1]-a[1];}).slice(0,8);
   }, [arts]);
 
+  // Local equivalents for Monitor tab
+  var localChartData = useMemo(function() {
+    var pool = localArts.filter(function(a){return !a.dismissed;});
+    var cnt = {};
+    TOPICS.forEach(function(t){cnt[t.id]=0;});
+    pool.forEach(function(a){if(a.topicId) cnt[a.topicId]=(cnt[a.topicId]||0)+1;});
+    return TOPICS.map(function(t){return {id:t.id,label:t.label,count:cnt[t.id]||0,color:t.color};});
+  }, [localArts]);
+
+  var localSrcCounts = useMemo(function() {
+    var pool = localArts.filter(function(a){return !a.dismissed;});
+    var cnt = {};
+    pool.forEach(function(a){if(a.source) cnt[a.source]=(cnt[a.source]||0)+1;});
+    return Object.entries(cnt).sort(function(a,b){return b[1]-a[1];}).slice(0,6);
+  }, [localArts]);
+
+  var activeLocalArts = useMemo(function(){
+    return localArts.filter(function(a){return !a.dismissed;});
+  }, [localArts]);
+
   useEffect(function(){loadSrv();}, []);
+  useEffect(function(){
+    if(kws.length===0) setKws(DEFAULT_KEYWORDS.slice());
+  }, []);
+
 
 
 
@@ -1532,6 +1614,8 @@ function App() {
               raw=raw.map(function(k){return {kw:k,topicId:'climate'};});
             }
             setKws(raw);
+          } else if (!d.settings.keywords || !d.settings.keywords.length) {
+            setKws(DEFAULT_KEYWORDS.slice());
           }
           if (d.settings.activeTopics) setActTop(new Set(d.settings.activeTopics));
           if (d.settings.activeSources) setActSrc(new Set(d.settings.activeSources));
@@ -2136,13 +2220,42 @@ function App() {
     var lc=lsrc.filter(function(s){return actSrc.has(s.id);}).length;
     var gc=effectiveGSRC.filter(function(s){return actSrc.has(s.id);}).length;
     var jc=effectiveJSRC.filter(function(s){return actSrc.has(s.id);}).length;
-    var sc=SIGCOL[trend&&trend.overallSignal]||'#546e7a';
+    var sc  = SIGCOL[trend&&trend.overallSignal]||'#546e7a';
+    var lsc = SIGCOL[localBriefing&&localBriefing.overallSignal]||'#546e7a';
+    var totalKws = kws.length;
+    var threshCount = (thresholds&&thresholds.assessments) ? Object.keys(thresholds.assessments).length : 0;
+
+    function ArtList(pool, limit) {
+      if (!pool.length) return h('div',{className:'empty',style:{padding:'20px'}},
+        h('span',{style:{fontSize:'12px',color:'var(--dim)',fontFamily:'var(--m)'}},'No articles'));
+      return h('div',{className:'alist',style:{maxHeight:'320px',overflowY:'auto'}},
+        pool.slice().reverse().slice(0,limit||12).map(function(a){
+          var tp=topicFor(a.topicId);
+          return h('div',{key:a.id||a.url,className:'aitem'},
+            h('div',{className:'atitle'},a.title),
+            h('div',{className:'ameta'},
+              h('span',{className:'asrc'},a.source),
+              h('span',{className:'adate'},a.date),
+              tp&&h('span',{className:'tag',style:{background:tp.color+'15',borderColor:tp.color+'40',color:tp.color}},tp.label.split(' ')[0])));
+        }));
+    }
+
+    function SrcBar(counts) {
+      if (!counts.length) return null;
+      var mx = counts[0][1];
+      return h('div',{className:'card',style:{padding:'10px 14px'}},
+        counts.map(function(e){
+          return h('div',{key:e[0],style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'6px'}},
+            h('span',{style:{fontSize:'11px',color:'var(--text)',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginRight:'8px'}},e[0]),
+            h('div',{style:{display:'flex',alignItems:'center',gap:'6px'}},
+              h('div',{style:{height:'3px',width:Math.max(12,(e[1]/mx)*60)+'px',background:'var(--cyan)',borderRadius:'2px',opacity:.5}}),
+              h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--muted)',minWidth:'16px',textAlign:'right'}},e[1])));
+        }));
+    }
+
     return h('div',null,
-      h('div',{className:'g4'},
-        h('div',{className:'scard',style:{'--accent':'#00d4ff'}},
-          h('div',{className:'slbl'},'Total Articles'),
-          h('div',{className:'sval'},arts.length),
-          h('div',{className:'ssub'},'in archive')),
+      // ── Row 1: General stats ─────────────────────────────────────────────
+      h('div',{className:'g4',style:{marginBottom:'16px'}},
         h('div',{className:'scard',style:{'--accent':'#c77dff'}},
           h('div',{className:'slbl'},'Active Topics'),
           h('div',{className:'sval'},actTop.size),
@@ -2151,50 +2264,84 @@ function App() {
           h('div',{className:'slbl'},'Active Sources'),
           h('div',{className:'sval'},lc+gc+jc),
           h('div',{className:'ssub'},lc+' local / '+gc+' global / '+jc+' journals')),
-        h('div',{className:'scard',style:{'--accent':sc}},
-          h('div',{className:'slbl'},'Overall Signal'),
-          h('div',{className:'sval',style:{fontSize:'16px',marginTop:'12px',fontFamily:'var(--h)',letterSpacing:'1px',color:sc}},
-            trend ? trend.overallSignal.toUpperCase() : (lastRun?'-':'NO DATA')),
-          h('div',{className:'ssub'},trend?'from pattern analysis':'run analysis'))),
+        h('div',{className:'scard',style:{'--accent':'#00d4ff'}},
+          h('div',{className:'slbl'},'Keywords Tracked'),
+          h('div',{className:'sval'},totalKws),
+          h('div',{className:'ssub'},'custom search terms')),
+        h('div',{className:'scard',style:{'--accent':'#00e87a'}},
+          h('div',{className:'slbl'},'Thresholds Tracked'),
+          h('div',{className:'sval'},threshCount||12),
+          h('div',{className:'ssub'},'planetary boundaries'))),
+
+      // ── Row 2: National | Local columns ──────────────────────────────────
       h('div',{className:'g2'},
+
+        // ── LEFT: National ──────────────────────────────────────────────────
         h('div',null,
-          h('div',{className:'slabel'},'Recent Articles'),
-          arts.length===0
-            ? h('div',{className:'alist'},h('div',{className:'empty',style:{padding:'30px 20px'}},
-                h('div',{className:'empty-t'},'No Data Collected'),
-                h('div',{className:'empty-s'},'Go to Intake to configure and run collection. Make sure server.py is running.'),
-                h('button',{className:'btn btn-p mt8',onClick:function(){setView('intake');}},'Open Intake')))
-            : h('div',{className:'alist',style:{maxHeight:'370px',overflowY:'auto'}},
-                arts.slice().reverse().slice(0,15).map(function(a){
-                  var tp=topicFor(a.topicId);
-                  return h('div',{key:a.id,className:'aitem'},
-                    h('div',{className:'atitle'},a.title),
-                    h('div',{className:'ameta'},
-                      h('span',{className:'asrc'},a.source),
-                      h('span',{className:'adate'},a.date),
-                      tp&&h('span',{className:'tag',style:{background:tp.color+'15',borderColor:tp.color+'40',color:tp.color}},tp.label.split(' ')[0]),
-                      a.type==='journal'&&h('span',{className:'tag tag-j'},'[j] JOURNAL'),
-                      a.region==='global'&&h('span',{className:'tag tag-g'},'INTL'),
-                      a.ingestSource==='gdelt'&&h('span',{className:'tag',style:{background:'rgba(100,200,100,.08)',borderColor:'rgba(100,200,100,.3)',color:'#6fcc6f'}},'GDELT')),
-                    a.snippet&&h('div',{className:'asnip'},a.snippet.slice(0,160)+(a.snippet.length>160?'...':'')),
-                    a.url&&h('a',{href:a.url,target:'_blank',rel:'noopener noreferrer',className:'alink'},'[->] '+a.url.slice(0,60)+(a.url.length>60?'...':'')));
-                }))),
-        h('div',null,
+          h('div',{className:'slabel'},'National / Global'),
+          h('div',{style:{display:'flex',gap:'8px',marginBottom:'12px'}},
+            h('div',{className:'scard',style:{'--accent':'#00d4ff',flex:1,minHeight:0,padding:'10px 12px'}},
+              h('div',{className:'slbl'},'Articles'),
+              h('div',{className:'sval'},arts.length),
+              h('div',{className:'ssub'},'national archive')),
+            h('div',{className:'scard',style:{'--accent':sc,flex:1,minHeight:0,padding:'10px 12px'}},
+              h('div',{className:'slbl'},'Global Signal'),
+              h('div',{className:'sval',style:{fontSize:'13px',marginTop:'6px',fontFamily:'var(--h)',letterSpacing:'1px',color:sc}},
+                trend&&trend.overallSignal ? trend.overallSignal.toUpperCase() : '-'),
+              h('div',{className:'ssub'},'from patterns')),
+            (function(){
+              var nsc=SIGCOL[localMon&&localMon.overallSignal]||'#546e7a';
+              return h('div',{className:'scard',style:{'--accent':nsc,flex:1,minHeight:0,padding:'10px 12px'}},
+                h('div',{className:'slbl'},'National Signal'),
+                h('div',{className:'sval',style:{fontSize:'13px',marginTop:'6px',fontFamily:'var(--h)',letterSpacing:'1px',color:nsc}},
+                  localMon&&localMon.overallSignal ? localMon.overallSignal.toUpperCase() : '-'),
+                h('div',{className:'ssub'},localMon&&localMon.country?localMon.country:'run national'));
+            })()),
           h('div',{className:'slabel'},'Articles by Topic'),
-          h('div',{className:'card mb12',style:{minHeight:'175px'}},
-            arts.length>0 ? h(MiniBarChart,{data:chartData})
+          h('div',{className:'card mb12',style:{minHeight:'160px'}},
+            arts.length>0
+              ? h(MiniBarChart,{data:chartData})
               : h('div',{className:'empty',style:{padding:'20px'}},h('span',{style:{color:'var(--dim)',fontSize:'12px',fontFamily:'var(--m)'}},'No data'))),
           srcCounts.length>0&&h('div',null,
             h('div',{className:'slabel'},'Top Sources'),
-            h('div',{className:'card',style:{padding:'10px 14px'}},
-              srcCounts.map(function(e){
-                var src=e[0],cnt=e[1],mx=srcCounts[0][1];
-                return h('div',{key:src,style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'7px'}},
-                  h('span',{style:{fontSize:'12px',color:'var(--text)'}},src),
-                  h('div',{style:{display:'flex',alignItems:'center',gap:'8px'}},
-                    h('div',{style:{height:'3px',width:Math.max(16,(cnt/mx)*70)+'px',background:'var(--cyan)',borderRadius:'2px',opacity:.5}}),
-                    h('span',{style:{fontFamily:'var(--m)',fontSize:'11px',color:'var(--muted)',minWidth:'18px',textAlign:'right'}},cnt)));
-              }))))))
+            SrcBar(srcCounts)),
+          h('div',{className:'slabel',style:{marginTop:'12px'}},'Recent Articles'),
+          arts.length===0
+            ? h('div',{className:'card'},h('div',{className:'empty',style:{padding:'30px 20px'}},
+                h('div',{className:'empty-t'},'No Data'),
+                h('div',{className:'empty-s'},'Go to Intake to collect articles.'),
+                h('button',{className:'btn btn-p mt8',onClick:function(){setView('intake');}},'Open Intake')))
+            : ArtList(arts, 12)),
+
+        // ── RIGHT: Local ────────────────────────────────────────────────────
+        h('div',null,
+          h('div',{className:'slabel'},'Local Community'),
+          h('div',{style:{display:'flex',gap:'10px',marginBottom:'12px'}},
+            h('div',{className:'scard',style:{'--accent':'#00e87a',flex:1,minHeight:0,padding:'12px 14px'}},
+              h('div',{className:'slbl'},'Local Articles'),
+              h('div',{className:'sval'},activeLocalArts.length),
+              h('div',{className:'ssub'},localArts.filter(function(a){return a.dismissed;}).length+' dismissed')),
+            h('div',{className:'scard',style:{'--accent':lsc,flex:1,minHeight:0,padding:'12px 14px'}},
+              h('div',{className:'slbl'},'Local Signal'),
+              h('div',{className:'sval',style:{fontSize:'14px',marginTop:'8px',fontFamily:'var(--h)',letterSpacing:'1px',color:lsc}},
+                localBriefing&&localBriefing.overallSignal ? localBriefing.overallSignal.toUpperCase() : 'NO DATA'),
+              h('div',{className:'ssub'},localBriefing&&localBriefing.updatedAt?('updated '+localBriefing.updatedAt):'run local briefing'))),
+          activeLocalArts.length>0
+            ? h('div',null,
+                h('div',{className:'slabel'},'Local Articles by Topic'),
+                h('div',{className:'card mb12',style:{minHeight:'160px'}},h(MiniBarChart,{data:localChartData})),
+                localSrcCounts.length>0&&h('div',null,
+                  h('div',{className:'slabel'},'Local Top Sources'),
+                  SrcBar(localSrcCounts)),
+                h('div',{className:'slabel',style:{marginTop:'12px'}},'Recent Local Articles'),
+                ArtList(activeLocalArts, 12))
+            : h('div',{className:'card',style:{padding:'30px 20px',textAlign:'center'}},
+                h('div',{className:'empty-t'},'No Local Data'),
+                h('div',{className:'empty-s'},
+                  (localCity||localState)
+                    ? 'Go to the Local tab to collect community news.'
+                    : 'Set your location in Intake, then collect local news.'),
+                h('button',{className:'btn btn-sm mt8',onClick:function(){setView('local');}},'Open Local Tab')))));
   }
 
   function vIntake() {
@@ -3327,9 +3474,9 @@ function App() {
           srcSaving&&h('span',{style:{fontFamily:'var(--m)',fontSize:'11px',color:'var(--muted)'}},'Saving...'))));
   }
 
-  var NAV=[{id:'monitor',ic:'[~]',label:'Monitor'},{id:'intake',ic:'[o]',label:'Intake'},
-    {id:'interrogate',ic:'[?]',label:'Interrogate'},{id:'patterns',ic:'[^]',label:'Patterns'},{id:'thresholds',ic:'[T]',label:'Thresholds'},{id:'national',ic:'[N]',label:'National'},{id:'local',ic:'[L]',label:'Local'},{id:'archive',ic:'[=]',label:'Archive'},{id:'sources',ic:'[#]',label:'Sources'}];
-  var TITLES={monitor:'Signal Monitor',intake:'Data Intake',archive:'Article Archive',interrogate:'Interrogate',patterns:'Pattern Analysis',sources:'Source Manager',thresholds:'Planetary Thresholds',national:'National Monitor',local:'Local Monitor'};
+  var NAV=[{id:'monitor',ic:'[~]',label:'Monitor'},
+    {id:'interrogate',ic:'[?]',label:'Interrogate'},{id:'patterns',ic:'[^]',label:'Patterns'},{id:'thresholds',ic:'[T]',label:'Thresholds'},{id:'national',ic:'[N]',label:'National'},{id:'local',ic:'[L]',label:'Local'},{id:'intake',ic:'[o]',label:'Intake'},{id:'keywords',ic:'[k]',label:'Keywords'},{id:'archive',ic:'[=]',label:'Archive'},{id:'sources',ic:'[#]',label:'Sources'}];
+  var TITLES={monitor:'Signal Monitor',intake:'Data Intake',archive:'Article Archive',interrogate:'Interrogate',patterns:'Pattern Analysis',sources:'Source Manager',thresholds:'Planetary Thresholds',national:'National Monitor',local:'Local Monitor',keywords:'Keyword Manager'};
 
   return h('div',{className:'app'},
     h('aside',{className:'sb'},
@@ -3363,6 +3510,7 @@ function App() {
         view==='archive'&&vArchive(),
         view==='interrogate'&&vInterrogate(),
         view==='patterns'&&vPatterns(),
+        view==='keywords'&&vKeywords(),
         view==='sources'&&vSources(),
         view==='thresholds'&&vThresholds(),
         view==='national'&&vLocal(),
@@ -3451,8 +3599,10 @@ function App() {
         +'\nKeys: location, updatedAt, topic, overallSignal (critical|elevated|moderate|low),'
         +'\n  summary (4-5 sentences with specifics about '+deepTopic.label+' in this community),'
         +'\n  sectors (6 objects: name/signal/collapseRate/status/keyDevelopment/trend/detail),'
-        +'\n  localRisks (5 strings specific to '+deepTopic.label+'), immediateWatchItems (5 strings),'
-        +'\n  communityImpacts (4 strings: direct resident effects), regionalContext (2 sentences),'
+        +'\n  communityImpacts (4 strings: direct resident effects),'
+        +'\n  localRisks (5 strings specific to '+deepTopic.label+'),'
+        +'\n  stabilizingFactors (3 strings: what is working or providing resilience),'
+        +'\n  immediateWatchItems (5 strings), regionalContext (2 sentences),'
         +'\n  keyDataPoints (4 strings: specific numbers/stats), outlook (2 sentences on trajectory).'
         +'\nSignal: critical elevated moderate low. Trend: accelerating stable slow recovering.'
         +'\nStart with { end with }.';
@@ -3464,7 +3614,9 @@ function App() {
         +'\nOutput ONLY a raw JSON object. No markdown.'
         +'\nKeys: location, updatedAt, overallSignal (critical|elevated|moderate|low),'
         +'\n  summary (3-4 sentences), sectors (6 objects: name/signal/collapseRate/status/keyDevelopment/trend),'
-        +'\n  localRisks (4 strings), immediateWatchItems (4 strings), communityImpacts (3 strings), regionalContext (2 sentences).'
+        +'\n  communityImpacts (3 strings: direct resident effects),'
+        +'\n  localRisks (4 strings), stabilizingFactors (3 strings: what is working or providing resilience),'
+        +'\n  immediateWatchItems (4 strings), regionalContext (2 sentences).'
         +'\nSectors: Infrastructure, Economy & Jobs, Food & Water, Energy, Public Health, Governance & Safety.'
         +'\nSignal: critical elevated moderate low. Trend: accelerating stable slow recovering.'
         +'\nStart with { end with }.';
@@ -3478,7 +3630,8 @@ function App() {
         if(!p){setErr('Could not parse briefing JSON. Try again.');return;}
         p.location=p.location||locLabel; p.updatedAt=p.updatedAt||todayStr;
         p.overallSignal=p.overallSignal||'moderate'; p.sectors=p.sectors||[];
-        p.localRisks=p.localRisks||[]; p.immediateWatchItems=p.immediateWatchItems||[];
+        p.localRisks=p.localRisks||[]; p.stabilizingFactors=p.stabilizingFactors||[];
+        p.immediateWatchItems=p.immediateWatchItems||[];
         p.communityImpacts=p.communityImpacts||[]; p.regionalContext=p.regionalContext||'';
         setLocalBriefing(p);
         fetch(srvUrl+'/local-briefing',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});
@@ -3610,23 +3763,7 @@ function App() {
             });
           })())),
 
-      !localArchiveOpen&&localArts.length>0&&h('div',{className:'card mb12'},
-
-        h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'10px'}},
-          h('div',{className:'card-h',style:{marginBottom:0}},localArts.length+' Local Articles'),
-          localLastRun&&h('span',{style:{fontFamily:'var(--m)',fontSize:'11px',color:'var(--muted)'}},'Last collected: '+new Date(localLastRun).toLocaleDateString())),
-        h('div',{className:'alist',style:{maxHeight:'220px',overflowY:'auto'}},
-          localArts.slice().reverse().slice(0,20).map(function(a){
-            var tp=topicFor(a.topicId);
-            return h('div',{key:a.id,className:'aitem'},
-              h('div',{className:'atitle'},a.title),
-              h('div',{className:'ameta'},
-                h('span',{className:'asrc'},a.source),h('span',{className:'adate'},a.date),
-                tp&&h('span',{className:'tag',style:{background:tp.color+'15',borderColor:tp.color+'40',color:tp.color}},tp.label.split(' ')[0])),
-              a.snippet&&h('div',{className:'asnip'},a.snippet.slice(0,130)+(a.snippet.length>130?'...':'')),
-              a.url&&h('a',{href:a.url,target:'_blank',rel:'noopener noreferrer',className:'alink'},'[->] '+(a.url.length>60?a.url.slice(0,60)+'...':a.url)));
-          }))),
-      localBriefRefreshing&&h('div',{className:'card',style:{textAlign:'center',padding:'30px'}},
+            localBriefRefreshing&&h('div',{className:'card',style:{textAlign:'center',padding:'30px'}},
         h('div',{className:'spin',style:{fontSize:'20px',color:'var(--cyan)',display:'block',marginBottom:'8px'}},'@'),
         h('div',{style:{fontSize:'12px',color:'var(--muted)'}},'Generating local briefing for '+locLabel+'...')),
       !bHas&&!localBriefRefreshing&&h('div',{className:'empty'},
@@ -3659,6 +3796,9 @@ function App() {
             })),
           h('div',null,
             h('div',{className:'card mb12'},
+              h('div',{className:'card-h',style:{color:'#00b4d8'}},'Community Impacts'),
+              h('ul',{className:'bullets'},(localBriefing.communityImpacts||[]).map(function(r,i){return h('li',{key:i},r);}))),
+            h('div',{className:'card mb12'},
               h('div',{className:'card-h',style:{color:'#ff6b7d'}},'Local Risk Factors'),
               h('div',{style:{fontSize:'11px',color:'var(--dim)',fontFamily:'var(--m)',marginBottom:'8px'}},'Click any item to find supporting articles'),
               h('div',null,(localBriefing.localRisks||[]).map(function(r,i){
@@ -3670,6 +3810,19 @@ function App() {
                     fontSize:'12px',color:active?'#ff6b7d':'#ff8a8a',lineHeight:'1.5'},
                   onClick:function(){openDrill(r);}},
                   h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:active?'#ff6b7d':'var(--dim)',marginRight:'6px'}},'[!]'),r);
+              }))),
+            (localBriefing.stabilizingFactors||[]).length>0&&h('div',{className:'card mb12'},
+              h('div',{className:'card-h',style:{color:'#00e87a'}},'Stabilizing Factors'),
+              h('div',{style:{fontSize:'11px',color:'var(--dim)',fontFamily:'var(--m)',marginBottom:'8px'}},'Click any item to find supporting articles'),
+              h('div',null,(localBriefing.stabilizingFactors||[]).map(function(r,i){
+                var active=drillQuery===r;
+                return h('div',{key:i,style:{
+                    padding:'7px 10px',marginBottom:'5px',borderRadius:'3px',cursor:'pointer',
+                    background:active?'rgba(0,232,122,.08)':'var(--s3)',
+                    border:'1px solid '+(active?'rgba(0,232,122,.4)':'var(--border)'),
+                    fontSize:'12px',color:active?'var(--green)':'#66ffb2',lineHeight:'1.5'},
+                  onClick:function(){openDrill(r);}},
+                  h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:active?'var(--green)':'var(--dim)',marginRight:'6px'}},'[+]'),r);
               }))),
             h('div',{className:'card mb12'},
               h('div',{className:'card-h',style:{color:'#ffd000'}},'Watch Items - Next 30 Days'),
@@ -3683,14 +3836,158 @@ function App() {
                   onClick:function(){openDrill(r);}},
                   h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:active?'#ffd000':'var(--dim)',marginRight:'6px'}},'[~]'),r);
               }))),
-            h('div',{className:'card mb12'},
-              h('div',{className:'card-h',style:{color:'#00b4d8'}},'Community Impacts'),
-              h('ul',{className:'bullets'},(localBriefing.communityImpacts||[]).map(function(r,i){return h('li',{key:i},r);}))),
             renderDrillPanel()))));}
 
 
-}
+  // ── KEYWORD MANAGER ──────────────────────────────────────────────────────
 
+  function vKeywords() {
+    function addKwTab() {
+      var k = kwNewText.trim();
+      if (!k) return;
+      if (kws.some(function(e){return e.kw===k;})) { setKwNewText(''); return; }
+      var updated = kws.concat([{kw:k, topicId:kwNewTopic}]);
+      setKws(updated); setKwNewText('');
+      saveSrv();
+    }
+
+    function removeKwAt(idx) {
+      var updated = kws.filter(function(_,i){return i!==idx;});
+      setKws(updated); saveSrv();
+    }
+
+    function updateTopicAt(idx, topicId) {
+      var updated = kws.map(function(e,i){return i===idx?Object.assign({},e,{topicId:topicId}):e;});
+      setKws(updated); saveSrv();
+    }
+
+    function saveEditAt(idx) {
+      var k = kwEditText.trim();
+      if (!k) return;
+      var updated = kws.map(function(e,i){return i===idx?Object.assign({},e,{kw:k}):e;});
+      setKws(updated); setKwEditIdx(-1); setKwEditText(''); saveSrv();
+    }
+
+    function addBulk() {
+      var lines = bulkText.split('\n').map(function(l){return l.trim();}).filter(Boolean);
+      var existing = new Set(kws.map(function(e){return e.kw;}));
+      var newEntries = lines.filter(function(l){return !existing.has(l);})
+        .map(function(l){return {kw:l, topicId:bulkTopic};});
+      if (!newEntries.length) { setBulkText(''); return; }
+      var updated = kws.concat(newEntries);
+      setKws(updated); setBulkText(''); setShowBulk(false); saveSrv();
+    }
+
+    function resetDefaults() {
+      if (!window.confirm('Reset all keywords to defaults? This will remove any custom keywords.')) return;
+      setKws(DEFAULT_KEYWORDS.slice()); saveSrv();
+    }
+
+    var filtered = kws.filter(function(e,i) {
+      if (kwFilter !== 'all' && e.topicId !== kwFilter) return false;
+      if (kwSearch.trim() && !e.kw.toLowerCase().includes(kwSearch.toLowerCase())) return false;
+      return true;
+    });
+
+    var counts = {};
+    TOPICS.forEach(function(t){counts[t.id]=0;});
+    kws.forEach(function(e){counts[e.topicId]=(counts[e.topicId]||0)+1;});
+
+    return h('div',null,
+      // ── Header row ──────────────────────────────────────────────────────────
+      h('div',{style:{display:'flex',alignItems:'center',gap:'10px',marginBottom:'14px',flexWrap:'wrap'}},
+        h('div',{style:{fontFamily:'var(--m)',fontSize:'11px',color:'var(--muted)'}},
+          kws.length+' keywords across '+Object.values(counts).filter(function(v){return v>0;}).length+' topics'),
+        h('button',{className:'btn btn-p btn-sm',onClick:function(){setShowBulk(function(v){return !v;});}},
+          showBulk ? '[x] Cancel Bulk' : '[+] Bulk Import'),
+        h('button',{className:'btn btn-sm',style:{marginLeft:'auto',color:'var(--red)',borderColor:'rgba(255,45,74,.3)'},
+          onClick:resetDefaults},'[~] Reset Defaults')),
+
+      // ── Bulk import ──────────────────────────────────────────────────────────
+      showBulk&&h('div',{className:'card mb12'},
+        h('div',{className:'card-h'},'Bulk Import'),
+        h('div',{style:{fontSize:'12px',color:'var(--muted)',marginBottom:'10px'}},'Paste keywords one per line. All will be assigned to the selected topic.'),
+        h('div',{style:{display:'flex',gap:'10px',marginBottom:'8px',alignItems:'flex-start'}},
+          h('textarea',{className:'inp',style:{flex:1,minHeight:'100px',fontFamily:'var(--m)',fontSize:'12px'},
+            value:bulkText,placeholder:'flooding Wisconsin\nPFAS contamination\nwater main break',
+            onInput:function(e){setBulkText(e.target.value);}}),
+          h('div',{style:{display:'flex',flexDirection:'column',gap:'8px',minWidth:'160px'}},
+            h('div',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--muted)',letterSpacing:'1px'}},'ASSIGN TO TOPIC'),
+            h('select',{className:'inp',style:{padding:'5px 8px',fontSize:'12px'},
+              value:bulkTopic,onChange:function(e){setBulkTopic(e.target.value);}},
+              TOPICS.map(function(t){return h('option',{key:t.id,value:t.id},t.label);})),
+            h('button',{className:'btn btn-p',onClick:addBulk},'[+] Import'))),
+        bulkText.trim()&&h('div',{style:{fontFamily:'var(--m)',fontSize:'11px',color:'var(--muted)'}},
+          bulkText.split('\n').filter(function(l){return l.trim();}).length+' lines detected')),
+
+      // ── Quick add + filter bar ────────────────────────────────────────────────
+      h('div',{className:'card mb12'},
+        h('div',{style:{display:'flex',gap:'8px',alignItems:'center',flexWrap:'wrap',marginBottom:'10px'}},
+          h('input',{className:'inp',style:{flex:1,minWidth:'160px',padding:'5px 10px',fontSize:'12px'},
+            value:kwNewText,placeholder:'Add a keyword...',
+            onInput:function(e){setKwNewText(e.target.value);},
+            onKeyDown:function(e){if(e.key==='Enter') addKwTab();}}),
+          h('select',{className:'inp',style:{width:'160px',padding:'5px 8px',fontSize:'12px'},
+            value:kwNewTopic,onChange:function(e){setKwNewTopic(e.target.value);}},
+            TOPICS.map(function(t){return h('option',{key:t.id,value:t.id},t.label);})),
+          h('button',{className:'btn btn-p',onClick:addKwTab},'[+] Add')),
+        h('div',{style:{display:'flex',gap:'8px',alignItems:'center',flexWrap:'wrap'}},
+          h('input',{className:'inp',style:{flex:1,minWidth:'140px',padding:'4px 10px',fontSize:'12px'},
+            value:kwSearch,placeholder:'Search keywords...',
+            onInput:function(e){setKwSearch(e.target.value);}}),
+          h('select',{className:'inp',style:{width:'160px',padding:'4px 8px',fontSize:'12px'},
+            value:kwFilter,onChange:function(e){setKwFilter(e.target.value);}},
+            h('option',{value:'all'},'All Topics ('+kws.length+')'),
+            TOPICS.map(function(t){
+              return h('option',{key:t.id,value:t.id},t.label+' ('+( counts[t.id]||0)+')');})))),
+
+      // ── Keyword table ─────────────────────────────────────────────────────────
+      h('div',{className:'card'},
+        filtered.length===0
+          ? h('div',{style:{padding:'20px',textAlign:'center',fontSize:'12px',color:'var(--muted)'}},'No keywords match the current filter.')
+          : h('table',{style:{width:'100%',borderCollapse:'collapse'}},
+              h('thead',null,
+                h('tr',null,
+                  h('th',{style:{textAlign:'left',fontFamily:'var(--m)',fontSize:'10px',color:'var(--muted)',letterSpacing:'1px',padding:'0 0 8px 0',borderBottom:'1px solid var(--border)'}},'KEYWORD'),
+                  h('th',{style:{textAlign:'left',fontFamily:'var(--m)',fontSize:'10px',color:'var(--muted)',letterSpacing:'1px',padding:'0 0 8px 12px',borderBottom:'1px solid var(--border)',width:'180px'}},'TOPIC'),
+                  h('th',{style:{borderBottom:'1px solid var(--border)',width:'80px'}}))),
+              h('tbody',null,
+                filtered.map(function(e) {
+                  var actualIdx = kws.indexOf(e);
+                  var tp = TOPICS.find(function(t){return t.id===e.topicId;});
+                  var isEditing = kwEditIdx===actualIdx;
+                  return h('tr',{key:actualIdx,style:{borderBottom:'1px solid var(--s3)'}},
+                    h('td',{style:{padding:'7px 0'}},
+                      isEditing
+                        ? h('input',{className:'inp',style:{padding:'3px 8px',fontSize:'12px',width:'100%'},
+                            value:kwEditText,
+                            onInput:function(ev){setKwEditText(ev.target.value);},
+                            onKeyDown:function(ev){if(ev.key==='Enter')saveEditAt(actualIdx);if(ev.key==='Escape'){setKwEditIdx(-1);setKwEditText('');}}})
+                        : h('span',{style:{fontSize:'12px',color:'var(--text)',cursor:'pointer',padding:'3px 0',display:'block'},
+                            title:'Click to edit',
+                            onClick:function(){setEditIdx(actualIdx);setEditText(e.kw);}},
+                            e.kw)),
+                    h('td',{style:{padding:'7px 0 7px 12px'}},
+                      isEditing
+                        ? h('button',{className:'btn btn-p btn-sm',style:{fontSize:'10px'},
+                            onClick:function(){saveEditAt(actualIdx);}},'[v] Save')
+                        : h('select',{className:'inp',style:{padding:'3px 6px',fontSize:'11px',width:'160px'},
+                            value:e.topicId,
+                            onChange:function(ev){updateTopicAt(actualIdx,ev.target.value);}},
+                            TOPICS.map(function(t){
+                              return h('option',{key:t.id,value:t.id},t.label);}))),
+                    h('td',{style:{padding:'7px 0',textAlign:'right'}},
+                      isEditing
+                        ? h('button',{className:'btn btn-sm',style:{fontSize:'10px'},
+                            onClick:function(){setEditIdx(-1);setEditText('');}}, '[x] Cancel')
+                        : h('button',{className:'btn btn-sm',
+                            style:{fontSize:'10px',color:'rgba(255,45,74,.8)',borderColor:'rgba(255,45,74,.3)'},
+                            onClick:function(){removeKwAt(actualIdx);}}, '[x]')));
+                })))));
+  }
+
+
+}
 ReactDOM.createRoot(document.getElementById('root')).render(h(App, null));
 </script>
 </body>
