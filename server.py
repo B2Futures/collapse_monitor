@@ -63,7 +63,7 @@ def gdelt_timelimit(from_date_str):
         return None
 
 # Minimum seconds between GDELT requests to avoid 429s
-GDELT_REQUEST_DELAY = 2.0
+GDELT_REQUEST_DELAY = 10.0
 _gdelt_last_request = 0.0
 
 
@@ -96,8 +96,8 @@ def fetch_gdelt(query, from_date_str, max_results=250, to_date_str=None):
 
     req_url = GDELT_API + "?" + urllib.parse.urlencode(params)
 
-    max_retries = 4
-    backoff     = 5.0   # initial backoff seconds; doubles each retry
+    max_retries = 3
+    backoff     = 30.0  # initial backoff seconds; doubles each retry
 
     for attempt in range(max_retries):
         # Enforce minimum spacing between requests
@@ -112,7 +112,7 @@ def fetch_gdelt(query, from_date_str, max_results=250, to_date_str=None):
             )
             _gdelt_last_request = time.time()
             with urllib.request.urlopen(req, timeout=20) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
+                raw = resp.read().decode("utf-8").strip()
 
         except urllib.error.HTTPError as e:
             _gdelt_last_request = time.time()
@@ -120,6 +120,8 @@ def fetch_gdelt(query, from_date_str, max_results=250, to_date_str=None):
                 wait = backoff * (2 ** attempt)
                 print(f"GDELT {e.code} on attempt {attempt+1}/{max_retries} "
                       f"for '{query[:60]}' — waiting {wait:.0f}s")
+                if attempt == max_retries - 1:
+                    return [], f"GDELT 429: rate-limited for '{query[:60]}'"
                 time.sleep(wait)
                 continue
             return [], f"HTTP {e.code}: {e.reason}"
@@ -128,10 +130,20 @@ def fetch_gdelt(query, from_date_str, max_results=250, to_date_str=None):
             _gdelt_last_request = time.time()
             if attempt < max_retries - 1:
                 wait = backoff * (2 ** attempt)
-                print(f"GDELT error attempt {attempt+1}/{max_retries}: {e} — retrying in {wait:.0f}s")
+                print(f"GDELT network error attempt {attempt+1}/{max_retries}: {e} — retrying in {wait:.0f}s")
                 time.sleep(wait)
                 continue
             return [], str(e)
+
+        # Empty body = no results for this query, not an error worth retrying
+        if not raw:
+            return [], None
+
+        # Non-JSON body (HTML error page etc) = treat as no results
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            return [], None
 
         # Success — parse articles
         articles = []
@@ -374,7 +386,7 @@ def collect():
 
                 # ---- GDELT passes ----
                 if source in ("gdelt", "both"):
-                    for base_query in variants[:2]:   # GDELT: base + year variant only (more precise)
+                    for base_query in variants[:1]:   # GDELT: base query only — reduce request volume
                         gdelt_arts, err = fetch_gdelt(base_query, from_date, max_results=20)
                         if err:
                             print(f"GDELT error for '{base_query}': {err}")
@@ -439,7 +451,7 @@ def collect_historical():
             tid      = topic_map.get(kw, topic_id)
             variants = build_variants(kw, tid)
 
-            for base_query in variants[:2]:   # base + year-tagged only for archive
+            for base_query in variants[:1]:   # base query only — reduce request volume
                 gdelt_arts, err = fetch_gdelt(
                     base_query, from_date,
                     max_results=250,
