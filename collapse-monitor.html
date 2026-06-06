@@ -1453,6 +1453,8 @@ function App() {
   var _drillQuery  = useState(null);      var drillQuery = _drillQuery[0], setDrillQuery = _drillQuery[1];
   var _drillArts   = useState([]);        var drillArts = _drillArts[0], setDrillArts = _drillArts[1];
   var _expanded    = useState({});         var expanded = _expanded[0], setExpanded = _expanded[1];
+  var _natTopic    = useState('all');      var natTopic = _natTopic[0], setNatTopic = _natTopic[1];
+  var _qTopic      = useState('all');      var qTopic = _qTopic[0], setQTopic = _qTopic[1];
 
   var effectiveGSRC = (srcs&&srcs.global)   ? srcs.global   : GSRC;
   var effectiveLSRC = (srcs&&srcs.local)    ? srcs.local    : LSRC;
@@ -1485,15 +1487,7 @@ function App() {
 
   useEffect(function(){loadSrv();}, []);
 
-  useEffect(function(){
-    if (view !== 'maps') return;
-    var t = setTimeout(function(){
-      if (mapMode==='events')  buildEventsMap();
-      if (mapMode==='risk')    buildRiskMap();
-      if (mapMode==='network') buildNetworkMap();
-    }, 120);
-    return function(){ clearTimeout(t); };
-  }, [view, mapMode, arts.length, trend]);
+
 
   function loadSrv() {
     fetch(srvUrl+'/load')
@@ -1523,6 +1517,11 @@ function App() {
         setConn(function(s){return Object.assign({},s,{server:true});});
         checkFailedQueries();
         loadSources(restoredSrcs);
+        // Auto-populate thresholds and national monitor from saved data
+        fetch(srvUrl+'/thresholds').then(function(r){return r.json();})
+          .then(function(d){if(d&&d.assessments) setThresholds(d);}).catch(function(){});
+        fetch(srvUrl+'/local-monitor').then(function(r){return r.json();})
+          .then(function(d){if(d&&d.sectors&&d.sectors.length) setLocalMon(d);}).catch(function(){});
       })
       .catch(function(){setConn(function(s){return Object.assign({},s,{server:false});});});
   }
@@ -1675,11 +1674,15 @@ function App() {
     return sc;
   }
 
-  function buildQACtx(ql) {
+  function buildQACtx(ql, topicFilter) {
     if (!arts.length) return null;
+    var pool = (topicFilter && topicFilter !== 'all')
+      ? arts.filter(function(a){return a.topicId===topicFilter;})
+      : arts;
+    if (!pool.length) pool = arts; // fall back to full archive if topic has no articles
     var qlc = ql.toLowerCase();
-    var scored = arts.map(function(a){return{a:a,s:scoreArt(a,qlc)};})
-      .sort(function(x,y){return y.s-x.s;}).slice(0,40);
+    var scored = pool.map(function(a){return{a:a,s:scoreArt(a,qlc)};}
+      ).sort(function(x,y){return y.s-x.s;}).slice(0,40);
     var lines = scored.map(function(x,i){
       var a=x.a, base='['+(i+1)+'] '+(a.topicId||'?')+' | '+(a.date||'?')+' | '+(a.source||'?')+' | '+(a.title||'');
       return i<12&&a.snippet ? base+'\n    > '+a.snippet.slice(0,180) : base;
@@ -1780,7 +1783,7 @@ function App() {
   function askQ() {
     if (!q.trim()||querying) return;
     setQuerying(true); setResp(''); setErr('');
-    var ctx = buildQACtx(q);
+    var ctx = buildQACtx(q, qTopic);
     var now = new Date();
     var todayStr = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
     var sys = 'You are a data analyst tracking systemic collapse patterns. Be precise and analytical. '
@@ -1789,7 +1792,7 @@ function App() {
     var prompt = ctx
       ? 'Collapse-tracking archive (articles sorted by relevance to your question):\n\n'+ctx
         +'\n\nToday is '+todayStr+'. Use article dates as your temporal reference.'
-        +'\n\nQUESTION: '+q+'\n\nAnswer based on the archive above. Cite articles by [number]. '
+        +'\n\nQUESTION: '+q+(qTopic!=='all'?' [Focus on '+((TOPICS.find(function(t){return t.id===qTopic;})||{label:qTopic}).label)+' sector only]':'')+'\n\nAnswer based on the archive above. Cite articles by [number]. '
         +'When stating dates or timeframes, use the dates shown in the articles, not assumptions from your training data.'
       : 'Expert analyst studying systemic collapse. Today is '+todayStr+'. No articles collected yet.\n\nQUESTION: '+q;
     callLM(sys,prompt,3000)
@@ -1819,7 +1822,7 @@ function App() {
       +'timeline: 6-10 entries in chronological order covering the most significant recent developments across all sectors.\n'
       +'leadingIndicators and emergingThreats: Be specific — name regions, quantities, trends, not vague generalities.\n'
       +'Include ALL 15 topics: climate,disease,manufacturing,trade,food,energy,finance,infrastructure,governance,water,migration,conflict,health_systems,tech_ai,agriculture.';
-    callLM(sys,prompt,8000)
+    callLM(sys,prompt,3000)
       .then(function(txt){var p=parseJson(txt); if(p){setTrend(p); saveSrv(arts,{trend:p});} else setErr('Could not parse JSON. Try again.');})
       .catch(function(e){setErr('LM Studio error: '+e.message);})
       .finally(function(){setAnalyzing(false);});
@@ -2098,7 +2101,7 @@ function App() {
         h('div',{className:'scard',style:{'--accent':sc}},
           h('div',{className:'slbl'},'Overall Signal'),
           h('div',{className:'sval',style:{fontSize:'16px',marginTop:'12px',fontFamily:'var(--h)',letterSpacing:'1px',color:sc}},
-            trend && trend.overallSignal ? trend.overallSignal.toUpperCase() : (lastRun?'-':'NO DATA')),
+            trend ? trend.overallSignal.toUpperCase() : (lastRun?'-':'NO DATA')),
           h('div',{className:'ssub'},trend?'from pattern analysis':'run analysis'))),
       h('div',{className:'g2'},
         h('div',null,
@@ -2393,8 +2396,15 @@ function App() {
     return h('div',null,
       h('div',{className:'card mb12'},
         h('div',{className:'card-h'},'Ask the Data'),
-        h('div',{style:{fontSize:'13px',color:'var(--muted)',marginBottom:'10px'}},
-          arts.length>0 ? 'Querying '+arts.length+' articles via '+lmMod+' (LM Studio).' : 'No articles -- will use model knowledge.'),
+        h('div',{style:{display:'flex',alignItems:'center',gap:'10px',marginBottom:'10px',flexWrap:'wrap'}},
+          h('div',{style:{fontSize:'13px',color:'var(--muted)',flex:1}},
+            arts.length>0 ? 'Querying '+arts.length+' articles via '+lmMod+'.' : 'No articles -- will use model knowledge.'),
+          h('div',{style:{display:'flex',alignItems:'center',gap:'6px'}},
+            h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--muted)',letterSpacing:'1px'}},'TOPIC:'),
+            h('select',{className:'inp',style:{width:'180px',padding:'5px 10px',fontSize:'12px'},
+              value:qTopic,onChange:function(e){setQTopic(e.target.value);}},
+              h('option',{value:'all'},'All Topics'),
+              TOPICS.map(function(t){return h('option',{key:t.id,value:t.id},t.label);})))),
         h('textarea',{className:'inp',value:q,onInput:function(e){setQ(e.target.value);},
           style:{minHeight:'110px',marginBottom:'10px'},
           placeholder:'e.g. What are the key climate patterns? Which sector is collapsing fastest?'}),
@@ -2538,9 +2548,8 @@ function App() {
                   onClick:function(){openDrill(t);}},
                   h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:active?'#ff6b7d':'var(--dim)',marginRight:'6px'}},'[!]'),
                   t);
-              }))))),
-
-        renderDrillPanel(),
+              }))),
+            renderDrillPanel())),
 
         (trend.timeline&&trend.timeline.length>0)&&h('div',{className:'card mt12 mb12'},
           h('div',{className:'card-h'},'Event Timeline'),
@@ -2555,10 +2564,6 @@ function App() {
                 h('div',{style:{fontSize:'13px',color:'var(--text)',lineHeight:'1.5',marginBottom:'3px'}},ev.event),
                 ev.significance&&h('div',{style:{fontSize:'11px',color:'var(--muted)',lineHeight:'1.4'}},ev.significance));
             }))),
-
-        h('div',{className:'card mt12'},
-          h('div',{className:'card-h'},'Collapse Rate Visualization'),
-          h('div',{style:{padding:'8px 0'}},h(CollapseChart,{sectors:trend.sectors||[]}))),
 
         ));
   }
@@ -2934,24 +2939,43 @@ function App() {
         .join('\n');
 
       // System prompt carries the full schema so user prompt stays short
-      var sys='You are a country risk analyst. Today: '+todayStr+'.'
-        +'\nOutput ONLY a raw JSON object — no markdown fences, no preamble, no explanation.'
-        +'\nThe JSON must have exactly these keys:'
-        +'\n  country (string), countryCode (string), updatedAt (string),'
-        +'\n  overallSignal (one of: critical elevated moderate low),'
-        +'\n  summary (string, 2-3 sentences),'
-        +'\n  sectors (array of 8 objects, each with: name, signal, collapseRate 0-100, status, keyDevelopment, trend),'
-        +'\n  uniqueRisks (array of 3 strings), stabilizingFactors (array of 2-3 strings), watchItems (array of 3 strings).'
-        +'\nSector names must be exactly: Political Stability & Governance, Economic Health, Food & Water Security,'
-        +'\n  Energy Infrastructure, Healthcare System, Climate Vulnerability, Social Cohesion, Supply Chain Resilience.'
-        +'\nSignal values: critical elevated moderate low. Trend values: accelerating stable slow recovering.'
-        +'\nStart your response with { and end with }. Nothing before or after the JSON object.';
+      var isDeepDive = natTopic !== 'all';
+      var deepTopic = isDeepDive ? (TOPICS.find(function(t){return t.id===natTopic;})||{label:natTopic,id:natTopic}) : null;
 
-      var prompt='Assess '+countryLabel+' ('+country.toUpperCase()+') risk status.'
-        +'\n\nRecent relevant headlines:\n'+headlines
-        +'\n\nReturn the JSON object now.';
+      var sys, prompt;
+      if (isDeepDive) {
+        sys='You are a country risk analyst specializing in '+deepTopic.label+'. Today: '+todayStr+'.'
+          +'\nOutput ONLY a raw JSON object — no markdown fences, no preamble, no explanation.'
+          +'\nJSON keys: country, countryCode, updatedAt, topic (string), overallSignal (critical|elevated|moderate|low),'
+          +'\n  summary (4-5 sentences with specific data and trends),'
+          +'\n  sectors (array of 6 objects each: name, signal, collapseRate 0-100, status, keyDevelopment, trend, detail),'
+          +'\n  uniqueRisks (array of 4 strings), stabilizingFactors (array of 3 strings), watchItems (array of 4 strings),'
+          +'\n  keyDataPoints (array of 4 strings with specific numbers/statistics),'
+          +'\n  outlook (string, 2-3 sentences on 6-12 month trajectory).'
+          +'\nSignal: critical elevated moderate low. Trend: accelerating stable slow recovering.'
+          +'\nStart with { end with }. Nothing else.';
+        prompt='Provide a deep-dive assessment of '+countryLabel+' ('+country.toUpperCase()+') specifically for: '+deepTopic.label+'.'
+          +'\n\nRecent relevant headlines:\n'+headlines
+          +'\n\nBe highly specific. Include actual data points, statistics, and named events where known. Return JSON now.';
+      } else {
+        sys='You are a country risk analyst. Today: '+todayStr+'.'
+          +'\nOutput ONLY a raw JSON object — no markdown fences, no preamble, no explanation.'
+          +'\nThe JSON must have exactly these keys:'
+          +'\n  country (string), countryCode (string), updatedAt (string),'
+          +'\n  overallSignal (one of: critical elevated moderate low),'
+          +'\n  summary (string, 2-3 sentences),'
+          +'\n  sectors (array of 8 objects, each with: name, signal, collapseRate 0-100, status, keyDevelopment, trend),'
+          +'\n  uniqueRisks (array of 3 strings), stabilizingFactors (array of 2-3 strings), watchItems (array of 3 strings).'
+          +'\nSector names must be exactly: Political Stability & Governance, Economic Health, Food & Water Security,'
+          +'\n  Energy Infrastructure, Healthcare System, Climate Vulnerability, Social Cohesion, Supply Chain Resilience.'
+          +'\nSignal values: critical elevated moderate low. Trend values: accelerating stable slow recovering.'
+          +'\nStart your response with { and end with }. Nothing before or after the JSON object.';
+        prompt='Assess '+countryLabel+' ('+country.toUpperCase()+') risk status.'
+          +'\n\nRecent relevant headlines:\n'+headlines
+          +'\n\nReturn the JSON object now.';
+      }
 
-      callLM(sys,prompt,5000)
+      callLM(sys,prompt,isDeepDive?7000:5000)
         .then(function(txt){
           console.log('[Local Monitor] raw LM output:', txt.slice(0,500));
           var p=parseJson(txt);
@@ -2983,12 +3007,18 @@ function App() {
     }
 
     return h('div',null,
-      h('div',{style:{display:'flex',alignItems:'center',gap:'10px',marginBottom:'16px',flexWrap:'wrap'}},
+      h('div',{style:{display:'flex',alignItems:'center',gap:'10px',marginBottom:'12px',flexWrap:'wrap'}},
         h('div',{style:{fontFamily:'var(--h)',fontSize:'18px',fontWeight:700,letterSpacing:'2px',color:'var(--text)'}},'['+countryFlag+'] '+countryLabel),
+        h('div',{style:{display:'flex',alignItems:'center',gap:'6px'}},
+          h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--muted)',letterSpacing:'1px'}},'MODE:'),
+          h('select',{className:'inp',style:{width:'185px',padding:'5px 10px',fontSize:'12px'},
+            value:natTopic,onChange:function(e){setNatTopic(e.target.value);}},
+            h('option',{value:'all'},'Full Briefing — All Topics'),
+            TOPICS.map(function(t){return h('option',{key:t.id,value:t.id},'Deep Dive: '+t.label);}))),
         h('button',{className:'btn btn-p',disabled:localRefreshing,onClick:refreshLocal},
           localRefreshing
             ? h('span',null,h('span',{className:'spin'},'@ '),'Analyzing...')
-            : '[^] '+(localMon.country&&!wrongCountry?'Refresh':'Run Local Monitor')),
+            : '[^] '+(localMon.country&&!wrongCountry?(natTopic==='all'?'Refresh Briefing':'Refresh Deep Dive'):(natTopic==='all'?'Run Full Briefing':'Run Deep Dive'))),
         localMon.updatedAt&&!wrongCountry&&h('span',{style:{fontFamily:'var(--m)',fontSize:'11px',color:'var(--muted)'}},'Updated: '+localMon.updatedAt),
         wrongCountry&&h('div',{className:'alert-info',style:{padding:'4px 10px',borderRadius:'3px',
           background:'rgba(255,119,51,.08)',border:'1px solid rgba(255,119,51,.3)',
@@ -3000,7 +3030,7 @@ function App() {
         h('div',{style:{fontSize:'12px',color:'var(--muted)'}},'Analyzing '+countryLabel+' across 8 sectors...')),
       !localMon.sectors&&!localRefreshing&&h('div',{className:'empty'},
         h('div',{className:'empty-t'},'No Local Data'),
-        h('div',{className:'empty-s'},'Click Run Local Monitor to generate a country-specific risk assessment for '+countryLabel+'. Change country in Intake → Your Country / Region.')),
+        h('div',{className:'empty-s'},'Select Full Briefing or a Deep Dive topic above, then click Run to generate a country-specific assessment for '+countryLabel+'.')),
       localMon.sectors&&!localRefreshing&&!wrongCountry&&h('div',null,
         h('div',{className:'card mb12'},
           h('div',{style:{display:'flex',alignItems:'center',gap:'10px',marginBottom:'8px',flexWrap:'wrap'}},
@@ -3195,8 +3225,8 @@ function App() {
   }
 
   var NAV=[{id:'monitor',ic:'[~]',label:'Monitor'},{id:'intake',ic:'[o]',label:'Intake'},
-    {id:'interrogate',ic:'[?]',label:'Interrogate'},{id:'patterns',ic:'[^]',label:'Patterns'},{id:'maps',ic:'[*]',label:'Maps'},{id:'thresholds',ic:'[T]',label:'Thresholds'},{id:'local',ic:'[L]',label:'Local'},{id:'archive',ic:'[=]',label:'Archive'},{id:'sources',ic:'[#]',label:'Sources'}];
-  var TITLES={monitor:'Signal Monitor',intake:'Data Intake',archive:'Article Archive',interrogate:'Interrogate',patterns:'Pattern Analysis',maps:'Signal Maps',sources:'Source Manager',thresholds:'Planetary Thresholds',local:'Local Monitor'};
+    {id:'interrogate',ic:'[?]',label:'Interrogate'},{id:'patterns',ic:'[^]',label:'Patterns'},{id:'thresholds',ic:'[T]',label:'Thresholds'},{id:'national',ic:'[N]',label:'National'},{id:'archive',ic:'[=]',label:'Archive'},{id:'sources',ic:'[#]',label:'Sources'}];
+  var TITLES={monitor:'Signal Monitor',intake:'Data Intake',archive:'Article Archive',interrogate:'Interrogate',patterns:'Pattern Analysis',sources:'Source Manager',thresholds:'Planetary Thresholds',national:'National Monitor'};
 
   return h('div',{className:'app'},
     h('aside',{className:'sb'},
@@ -3230,10 +3260,9 @@ function App() {
         view==='archive'&&vArchive(),
         view==='interrogate'&&vInterrogate(),
         view==='patterns'&&vPatterns(),
-        view==='maps'&&vMaps(),
         view==='sources'&&vSources(),
         view==='thresholds'&&vThresholds(),
-        view==='local'&&vLocal())));
+        view==='national'&&vLocal())));
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(h(App, null));
