@@ -219,6 +219,7 @@ def retry_failed():
                 "topicId":      topic_id,
                 "type":         "news",
                 "region":       "global",
+                "trusted":      any(d in url for d in domains) if domains else False,
                 "ingestSource": "gdelt",
                 "fetchedAt":    datetime.now(timezone.utc).isoformat()
             })
@@ -462,6 +463,56 @@ def collect_local():
     return jsonify({"articles": articles, "count": len(articles)})
 
 
+
+@app.route("/retag-articles", methods=["POST"])
+def retag_articles():
+    """Re-stamp trusted flag on all articles based on current sources.json."""
+    try:
+        # Load current sources list to build trusted domains set
+        trusted_domains = set()
+        if os.path.exists(SOURCES_FILE):
+            with open(SOURCES_FILE, "r", encoding="utf-8") as f:
+                srcs = json.load(f)
+            # sources.json is structured as {country: {local:[...], global:[...], journals:[...]}}
+            for country_data in srcs.values():
+                if isinstance(country_data, dict):
+                    for group in country_data.values():
+                        if isinstance(group, list):
+                            for src in group:
+                                if isinstance(src, dict) and src.get("domain"):
+                                    trusted_domains.add(src["domain"].lower())
+
+        if not trusted_domains:
+            return jsonify({"ok": False, "error": "No domains found in sources.json"}), 400
+
+        # Load and retag articles
+        articles = load_articles()
+        tagged = 0
+        for a in articles:
+            url = (a.get("url") or "").lower()
+            domain = extract_domain(url).lower()
+            was = a.get("trusted")
+            a["trusted"] = any(d in domain or d in url for d in trusted_domains)
+            if a["trusted"] != was:
+                tagged += 1
+
+        # Save back
+        with open(ARTICLES_FILE, "w", encoding="utf-8") as f:
+            json.dump(articles, f, indent=2, ensure_ascii=False)
+
+        return jsonify({
+            "ok": True,
+            "total": len(articles),
+            "tagged": tagged,
+            "trustedDomains": len(trusted_domains),
+            "trustedCount": sum(1 for a in articles if a.get("trusted")),
+            "untrustedCount": sum(1 for a in articles if not a.get("trusted"))
+        })
+
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @app.route("/load")
 def load():
     return jsonify({"articles": load_articles(), "settings": load_settings()})
@@ -500,11 +551,7 @@ def collect():
                 # ---- DDG passes ----
                 if source in ("ddg", "both"):
                     for v_idx, base_query in enumerate(variants):
-                        passes = []
-                        if v_idx == 0 and domains:
-                            hints = " ".join("site:" + d for d in domains[:3])
-                            passes.append(base_query + " " + hints)
-                        passes.append(base_query)
+                        passes = [base_query]  # no domain restriction — collect everything
 
                         got_results = False
                         for query in passes:
@@ -531,6 +578,7 @@ def collect():
                                     "topicId":   tid,
                                     "type":      "news",
                                     "region":    "global",
+                                    "trusted":   any(d in url for d in domains) if domains else False,
                                     "ingestSource": "ddg",
                                     "fetchedAt": datetime.now(timezone.utc).isoformat()
                                 })

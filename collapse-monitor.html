@@ -1507,6 +1507,10 @@ function App() {
   var _expanded    = useState({});         var expanded = _expanded[0], setExpanded = _expanded[1];
   var _natTopic    = useState('all');      var natTopic = _natTopic[0], setNatTopic = _natTopic[1];
   var _qTopic      = useState('all');      var qTopic = _qTopic[0], setQTopic = _qTopic[1];
+  var _srcFilter   = useState('all');      var srcFilter = _srcFilter[0], setSrcFilter = _srcFilter[1];
+  var _archTrustFilter = useState('all'); var archTrustFilter = _archTrustFilter[0], setArchTrustFilter = _archTrustFilter[1];
+  var _retagging    = useState(false);    var retagging = _retagging[0],    setRetagging    = _retagging[1];
+  var _retagResult  = useState(null);     var retagResult = _retagResult[0], setRetagResult  = _retagResult[1];
   var _localCity      = useState('');      var localCity = _localCity[0], setLocalCity = _localCity[1];
   var _localCounty    = useState('');      var localCounty = _localCounty[0], setLocalCounty = _localCounty[1];
   var _localState     = useState('');      var localState = _localState[0], setLocalState = _localState[1];
@@ -1551,13 +1555,15 @@ function App() {
   var filtered = useMemo(function() {
     return arts.filter(function(a) {
       if (fTop !== 'all' && a.topicId !== fTop) return false;
+      if (archTrustFilter === 'trusted' && a.trusted !== true) return false;
+      if (archTrustFilter === 'unverified' && a.trusted === true) return false;
       if (sq) {
         var ql = sq.toLowerCase();
         if (!(a.title||'').toLowerCase().includes(ql) && !(a.snippet||'').toLowerCase().includes(ql)) return false;
       }
       return true;
     });
-  }, [arts, fTop, sq]);
+  }, [arts, fTop, sq, archTrustFilter]);
 
   var chartData = useMemo(function() {
     var c = {};
@@ -1591,6 +1597,20 @@ function App() {
   var activeLocalArts = useMemo(function(){
     return localArts.filter(function(a){return !a.dismissed;});
   }, [localArts]);
+
+  var filteredArts = useMemo(function(){
+    if (srcFilter==='all') return arts;
+    if (srcFilter==='trusted') return arts.filter(function(a){return a.trusted===true;});
+    return arts.filter(function(a){return !a.trusted;});
+  }, [arts, srcFilter]);
+
+  var trustedCount   = useMemo(function(){
+    return arts.filter(function(a){return a.trusted===true;}).length;
+  }, [arts]);
+
+  var untrustedCount = useMemo(function(){
+    return arts.filter(function(a){return !a.trusted;}).length;
+  }, [arts]);
 
   useEffect(function(){loadSrv();}, []);
   useEffect(function(){
@@ -1810,7 +1830,7 @@ function App() {
   }
 
   function buildQACtx(ql, topicFilter) {
-    var allArts = arts.concat(localArts.filter(function(a){return !a.dismissed;})); // national + active local articles
+    var allArts = filteredArts.concat(localArts.filter(function(a){return !a.dismissed;})); // filtered national + active local articles
     if (!allArts.length) return null;
     var pool = (topicFilter && topicFilter !== 'all')
       ? allArts.filter(function(a){return a.topicId===topicFilter;})
@@ -1830,11 +1850,11 @@ function App() {
   }
 
   function buildPatCtx() {
-    if (!arts.length) return null;
+    if (!filteredArts.length) return null;
     var byT={};
     TOPICS.forEach(function(t){byT[t.id]=[];});
-    arts.forEach(function(a){if(byT[a.topicId]) byT[a.topicId].push(a);});
-    var hdr='ARCHIVE ('+arts.length+' total):\n'+TOPICS.map(function(t){
+    filteredArts.forEach(function(a){if(byT[a.topicId]) byT[a.topicId].push(a);});
+    var hdr='ARCHIVE ('+filteredArts.length+(srcFilter!=='all'?' '+srcFilter:'')+' articles):\n'+TOPICS.map(function(t){
       var arr=byT[t.id]||[];
       var rec=arr.slice().sort(function(a,b){return(b.date||'').localeCompare(a.date||'');}).slice(0,3);
       return t.id+': '+arr.length+(rec.length?' | recent: '+rec.map(function(a){return a.title.slice(0,50);}).join('; '):'');
@@ -2240,7 +2260,9 @@ function App() {
             h('div',{className:'ameta'},
               h('span',{className:'asrc'},a.source),
               h('span',{className:'adate'},a.date),
-              tp&&h('span',{className:'tag',style:{background:tp.color+'15',borderColor:tp.color+'40',color:tp.color}},tp.label.split(' ')[0])));
+              tp&&h('span',{className:'tag',style:{background:tp.color+'15',borderColor:tp.color+'40',color:tp.color}},tp.label.split(' ')[0]),
+              a.trusted===true&&h('span',{style:{fontFamily:'var(--m)',fontSize:'9px',padding:'1px 4px',borderRadius:'2px',background:'rgba(0,232,122,.1)',border:'1px solid rgba(0,232,122,.3)',color:'var(--green)'}},'T'),
+              a.trusted===false&&h('span',{style:{fontFamily:'var(--m)',fontSize:'9px',padding:'1px 4px',borderRadius:'2px',background:'rgba(84,110,122,.08)',border:'1px solid rgba(84,110,122,.2)',color:'#546e7a'}},'?')));
         }));
     }
 
@@ -2283,10 +2305,43 @@ function App() {
         // ── LEFT: National ──────────────────────────────────────────────────
         h('div',null,
           h('div',{className:'slabel'},'National / Global'),
-                    h('div',{className:'slabel'},'Articles by Topic'),
+          h('div',{style:{display:'flex',alignItems:'center',gap:'8px',marginBottom:'10px',flexWrap:'wrap'}},
+            h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--muted)',letterSpacing:'1px'}},'SOURCE FILTER:'),
+            ['all','trusted','unverified'].map(function(v){
+              var labels={all:'All ('+arts.length+')',trusted:'Trusted ('+trustedCount+')',unverified:'Unverified ('+untrustedCount+')'};
+              return h('button',{key:v,className:'btn btn-sm',
+                style:{fontSize:'10px',padding:'2px 8px',
+                  background:srcFilter===v?'rgba(0,180,216,.15)':'',
+                  borderColor:srcFilter===v?'var(--cyan)':'var(--border)',
+                  color:srcFilter===v?'var(--cyan)':'var(--muted)'},
+                onClick:function(){setSrcFilter(v);}},labels[v]);
+            })),
+          h('div',{style:{display:'flex',gap:'8px',marginBottom:'12px'}},
+            h('div',{className:'scard',style:{'--accent':'#00d4ff',flex:1,minHeight:0,padding:'10px 12px'}},
+              h('div',{className:'slbl'},'Articles'),
+              h('div',{className:'sval'},filteredArts.length),
+              h('div',{className:'ssub'},srcFilter==='all'?'total archive':srcFilter+' only')),
+            h('div',{className:'scard',style:{'--accent':sc,flex:1,minHeight:0,padding:'10px 12px'}},
+              h('div',{className:'slbl'},'Global Signal'),
+              h('div',{className:'sval',style:{fontSize:'13px',marginTop:'6px',fontFamily:'var(--h)',letterSpacing:'1px',color:sc}},
+                trend&&trend.overallSignal ? trend.overallSignal.toUpperCase() : '-'),
+              h('div',{className:'ssub'},'from patterns')),
+            (function(){
+              var nsc=SIGCOL[localMon&&localMon.overallSignal]||'#546e7a';
+              return h('div',{className:'scard',style:{'--accent':nsc,flex:1,minHeight:0,padding:'10px 12px'}},
+                h('div',{className:'slbl'},'National Signal'),
+                h('div',{className:'sval',style:{fontSize:'13px',marginTop:'6px',fontFamily:'var(--h)',letterSpacing:'1px',color:nsc}},
+                  localMon&&localMon.overallSignal ? localMon.overallSignal.toUpperCase() : '-'),
+                h('div',{className:'ssub'},localMon&&localMon.country?localMon.country:'run national'));
+            })()),
+          h('div',{className:'slabel'},'Articles by Topic'),
           h('div',{className:'card mb12',style:{minHeight:'160px'}},
-            arts.length>0
-              ? h(MiniBarChart,{data:chartData})
+            filteredArts.length>0
+              ? h(MiniBarChart,{data:(function(){
+                  var cnt={}; TOPICS.forEach(function(t){cnt[t.id]=0;});
+                  filteredArts.forEach(function(a){if(a.topicId) cnt[a.topicId]=(cnt[a.topicId]||0)+1;});
+                  return TOPICS.map(function(t){return {id:t.id,label:t.label,count:cnt[t.id]||0,color:t.color};});
+                }())})
               : h('div',{className:'empty',style:{padding:'20px'}},h('span',{style:{color:'var(--dim)',fontSize:'12px',fontFamily:'var(--m)'}},'No data'))),
           srcCounts.length>0&&h('div',null,
             h('div',{className:'slabel'},'Top Sources'),
@@ -2297,7 +2352,7 @@ function App() {
                 h('div',{className:'empty-t'},'No Data'),
                 h('div',{className:'empty-s'},'Go to Intake to collect articles.'),
                 h('button',{className:'btn btn-p mt8',onClick:function(){setView('intake');}},'Open Intake')))
-            : ArtList(arts, 12)),
+            : ArtList(filteredArts, 12)),
 
         // ── RIGHT: Local ────────────────────────────────────────────────────
         h('div',null,
@@ -2576,6 +2631,16 @@ function App() {
           h('select',{className:'inp',style:{width:'175px'},value:fTop,onChange:function(e){setFTop(e.target.value);}},
             h('option',{value:'all'},'All Topics'),
             TOPICS.map(function(t){return h('option',{key:t.id,value:t.id},t.label);})),
+          h('div',{style:{display:'flex',alignItems:'center',gap:'5px'}},
+            ['all','trusted','unverified'].map(function(v){
+              var labels={all:'All',trusted:'T',unverified:'?'};
+              return h('button',{key:v,className:'btn btn-sm',
+                style:{fontSize:'10px',padding:'2px 6px',
+                  background:archTrustFilter===v?'rgba(0,180,216,.15)':'',
+                  borderColor:archTrustFilter===v?'var(--cyan)':'var(--border)',
+                  color:archTrustFilter===v?'var(--cyan)':'var(--muted)'},
+                onClick:function(){setArchTrustFilter(v);}},labels[v]);
+            })),
           h('span',{style:{fontFamily:'var(--m)',fontSize:'11px',color:'var(--muted)',whiteSpace:'nowrap'}},filtered.length+' / '+arts.length))),
       filtered.length===0
         ? h('div',{className:'empty'},
@@ -2628,7 +2693,18 @@ function App() {
               (arts.length+localArts.filter(function(a){return !a.dismissed;}).length)===0&&
                 h('span',{style:{fontSize:'12px',color:'var(--muted)'}},'No articles -- will use model knowledge.'),
               (arts.length+localArts.filter(function(a){return !a.dismissed;}).length)>0&&
-                h('span',{style:{fontSize:'11px',color:'var(--dim)'}},'via '+lmMod))),
+                h('span',{style:{fontSize:'11px',color:'var(--dim)'}},'via '+lmMod)),
+            h('div',{style:{display:'flex',alignItems:'center',gap:'6px',marginTop:'6px'}},
+              h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--muted)',letterSpacing:'1px'}},'NATIONAL:'),
+              ['all','trusted','unverified'].map(function(v){
+                var labels={all:'All',trusted:'Trusted',unverified:'Unverified'};
+                return h('button',{key:v,className:'btn btn-sm',
+                  style:{fontSize:'10px',padding:'2px 6px',
+                    background:srcFilter===v?'rgba(0,180,216,.15)':'',
+                    borderColor:srcFilter===v?'var(--cyan)':'var(--border)',
+                    color:srcFilter===v?'var(--cyan)':'var(--muted)'},
+                  onClick:function(){setSrcFilter(v);}},labels[v]);
+              }))),
           h('div',{style:{display:'flex',alignItems:'center',gap:'6px'}},
             h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--muted)',letterSpacing:'1px'}},'TOPIC:'),
             h('select',{className:'inp',style:{width:'180px',padding:'5px 10px',fontSize:'12px'},
@@ -2693,7 +2769,18 @@ function App() {
       h('div',{style:{display:'flex',alignItems:'center',gap:'8px',marginBottom:'16px',flexWrap:'wrap'}},
         h('button',{className:'btn btn-p',disabled:analyzing,onClick:doAnalyze},
           analyzing ? h('span',null,h('span',{className:'spin'},'@ '),'Running Analysis...') : '[^] '+(trend?'Re-analyze':'Analyze Patterns & Collapse Rates')),
-        h('span',{style:{fontSize:'12px',color:'var(--muted)'}},arts.length>0?'Based on '+arts.length+' collected articles':'Will analyze from model knowledge')),
+        h('div',{style:{marginLeft:'auto',display:'flex',alignItems:'center',gap:'6px'}},
+          h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--muted)',letterSpacing:'1px'}},'SOURCES:'),
+          ['all','trusted','unverified'].map(function(v){
+            var labels={all:'All ('+arts.length+')',trusted:'Trusted ('+trustedCount+')',unverified:'Unverified ('+untrustedCount+')'};
+            return h('button',{key:v,className:'btn btn-sm',
+              style:{fontSize:'10px',padding:'2px 6px',
+                background:srcFilter===v?'rgba(0,180,216,.15)':'',
+                borderColor:srcFilter===v?'var(--cyan)':'var(--border)',
+                color:srcFilter===v?'var(--cyan)':'var(--muted)'},
+              onClick:function(){setSrcFilter(v);}},labels[v]);
+          })),
+        h('span',{style:{fontSize:'12px',color:'var(--muted)'}},arts.length>0?'Based on '+filteredArts.length+' collected articles':'Will analyze from model knowledge')),
       err&&h('div',{className:'alert alert-err'},err),
       analyzing&&h('div',{className:'card',style:{textAlign:'center',padding:'40px'}},
         h('div',{className:'spin',style:{fontSize:'22px',color:'var(--cyan)',display:'block',marginBottom:'12px'}},'@'),
@@ -3081,9 +3168,9 @@ function App() {
     function refreshThresholds() {
       if(threshRefreshing) return;
       setThreshRefreshing(true); setErr('');
-      var artCtx=arts.length>0
-        ? 'Archive has '+arts.length+' articles. Recent:\n'+
-          arts.slice().sort(function(a,b){return(b.date||'').localeCompare(a.date||'');}).slice(0,20)
+      var artCtx=filteredArts.length>0
+        ? 'Archive has '+filteredArts.length+(srcFilter!=='all'?' ('+srcFilter+' only)':'')+' articles. Recent:\n'+
+          filteredArts.slice().sort(function(a,b){return(b.date||'').localeCompare(a.date||'');}).slice(0,20)
             .map(function(a){return a.date+' | '+a.title;}).join('\n')
         : 'No archive.';
       var sys='You are a climate scientist. Today is '+todayStr+'. Return only valid JSON.';
@@ -3114,6 +3201,17 @@ function App() {
           threshRefreshing
             ? h('span',null,h('span',{className:'spin'},'@ '),'Analyzing...')
             : '[^] '+(thresholds.updatedAt?'Refresh Thresholds':'Run Threshold Assessment')),
+        h('div',{style:{marginLeft:'auto',display:'flex',alignItems:'center',gap:'6px'}},
+          h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--muted)',letterSpacing:'1px'}},'SOURCES:'),
+          ['all','trusted','unverified'].map(function(v){
+            var labels={all:'All ('+arts.length+')',trusted:'Trusted ('+trustedCount+')',unverified:'Unverified ('+untrustedCount+')'};
+            return h('button',{key:v,className:'btn btn-sm',
+              style:{fontSize:'10px',padding:'2px 6px',
+                background:srcFilter===v?'rgba(0,180,216,.15)':'',
+                borderColor:srcFilter===v?'var(--cyan)':'var(--border)',
+                color:srcFilter===v?'var(--cyan)':'var(--muted)'},
+              onClick:function(){setSrcFilter(v);}},labels[v]);
+          })),
         thresholds.updatedAt&&h('span',{style:{fontFamily:'var(--m)',fontSize:'11px',color:'var(--muted)'}},'Last updated: '+thresholds.updatedAt),
         h('span',{style:{fontSize:'12px',color:'var(--dim)'}},'Uses LM Studio + your collected articles')),
       err&&h('div',{className:'alert alert-err'},err),
@@ -3161,7 +3259,7 @@ function App() {
       if(localRefreshing) return;
       setLocalRefreshing(true); setErr('');
       var cDomains=(effectiveLSRC[country]||{sources:[]}).sources.map(function(s){return s.domain;});
-      var localArts=arts.filter(function(a){
+      var localArts=filteredArts.filter(function(a){
         return cDomains.some(function(d){return(a.source||'').includes(d)||((a.url||'').includes(d));});
       });
       var pool=localArts.length>=5?localArts:arts;
@@ -3242,6 +3340,17 @@ function App() {
     return h('div',null,
       h('div',{style:{display:'flex',alignItems:'center',gap:'10px',marginBottom:'12px',flexWrap:'wrap'}},
         h('div',{style:{fontFamily:'var(--h)',fontSize:'18px',fontWeight:700,letterSpacing:'2px',color:'var(--text)'}},'['+countryFlag+'] '+countryLabel),
+        h('div',{style:{display:'flex',alignItems:'center',gap:'6px'}},
+          h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--muted)',letterSpacing:'1px'}},'SOURCES:'),
+          ['all','trusted','unverified'].map(function(v){
+            var labels={all:'All',trusted:'Trusted',unverified:'Unverified'};
+            return h('button',{key:v,className:'btn btn-sm',
+              style:{fontSize:'10px',padding:'2px 6px',
+                background:srcFilter===v?'rgba(0,180,216,.15)':'',
+                borderColor:srcFilter===v?'var(--cyan)':'var(--border)',
+                color:srcFilter===v?'var(--cyan)':'var(--muted)'},
+              onClick:function(){setSrcFilter(v);}},labels[v]);
+          })),
         h('div',{style:{display:'flex',alignItems:'center',gap:'6px'}},
           h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--muted)',letterSpacing:'1px'}},'MODE:'),
           h('select',{className:'inp',style:{width:'185px',padding:'5px 10px',fontSize:'12px'},
@@ -3348,6 +3457,25 @@ function App() {
                     })))))));
   }
 
+  function retagArts() {
+    if (retagging) return;
+    setRetagging(true); setRetagResult(null);
+    fetch(srvUrl+'/retag-articles', {method:'POST', headers:{'Content-Type':'application/json'}})
+      .then(function(r){return r.json();})
+      .then(function(d){
+        if (!d.ok) { setErr('Retag failed: '+(d.error||'unknown error')); return; }
+        setRetagResult(d);
+        // Reload articles from server so trust badges update immediately
+        fetch(srvUrl+'/load')
+          .then(function(r){return r.json();})
+          .then(function(data){
+            if (data.articles) setArts(data.articles);
+          }).catch(function(){});
+      })
+      .catch(function(e){setErr('Retag error: '+e.message);})
+      .finally(function(){setRetagging(false);});
+  }
+
   function vSources() {
     // srcs should always be set by now (loadSources falls back to defaults)
     // but guard defensively just in case
@@ -3400,12 +3528,28 @@ function App() {
     return h('div',null,
       h('div',{className:'card mb12'},
         h('div',{className:'card-h'},'Source Manager'),
-        h('div',{style:{fontSize:'12px',color:'var(--muted)',lineHeight:'1.65'}},
-          'Saved to ',h('span',{style:{fontFamily:'var(--m)',color:'var(--cyan)'}},'sources.json'),
-          ' in the app folder. Your changes persist across GitHub updates. '
-          +'Removing a source stops it being used in future collections — existing articles stay in your archive.'),
-        srcMsg&&h('div',{style:{fontFamily:'var(--m)',fontSize:'11px',marginTop:'8px',
-          color:srcMsg.startsWith('Error')?'#ff6b7d':'var(--green)'}},'['+srcMsg+']')),
+        h('div',{style:{fontSize:'12px',color:'var(--muted)',lineHeight:'1.65',marginBottom:'10px'}},
+          'Domains listed here are your ',
+          h('span',{style:{color:'var(--cyan)',fontFamily:'var(--m)'}},'trusted sources'),
+          '. Articles whose URL matches a domain here get a ',
+          h('span',{style:{color:'var(--green)',fontFamily:'var(--m)'}},'T'),
+          ' badge; all others get ',
+          h('span',{style:{color:'#546e7a',fontFamily:'var(--m)'}},'?'),
+          '. Use the source filter on Monitor and Interrogate to choose which articles feed into analysis. Collection now pulls from all domains regardless of this list.'),
+        h('div',{style:{display:'flex',alignItems:'center',gap:'10px',marginBottom:'12px',flexWrap:'wrap'}},
+          h('button',{className:'btn btn-p',disabled:retagging,onClick:retagArts},
+            retagging
+              ? h('span',null,h('span',{className:'spin'},'@ '),'Retagging...')
+              : '[~] Retag All Articles'),
+          h('div',{style:{fontSize:'12px',color:'var(--muted)'}},
+            'Stamps T/? on every article in your archive based on the current domain list below.'),
+          retagResult&&h('div',{style:{fontFamily:'var(--m)',fontSize:'11px',
+            padding:'4px 10px',borderRadius:'3px',
+            background:'rgba(0,232,122,.08)',border:'1px solid rgba(0,232,122,.25)',color:'var(--green)'}},
+            'Done: '+retagResult.total+' articles — '
+            +retagResult.trustedCount+' trusted, '
+            +retagResult.untrustedCount+' unverified'
+            +(retagResult.tagged>0?' ('+retagResult.tagged+' changed)':''))),
 
       h('div',{style:{display:'flex',gap:'6px',flexWrap:'wrap',marginBottom:'12px'}},
         tabs.map(function(t){
@@ -3454,7 +3598,7 @@ function App() {
           h('button',{className:'btn btn-p',
             disabled:!srcNewName.trim()||!srcNewDom.trim()||srcSaving,
             onClick:addSource},'[+] Add'),
-          srcSaving&&h('span',{style:{fontFamily:'var(--m)',fontSize:'11px',color:'var(--muted)'}},'Saving...'))));
+          srcSaving&&h('span',{style:{fontFamily:'var(--m)',fontSize:'11px',color:'var(--muted)'}},'Saving...')))));
   }
 
   var NAV=[{id:'monitor',ic:'[~]',label:'Monitor'},
