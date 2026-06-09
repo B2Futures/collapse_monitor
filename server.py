@@ -219,7 +219,7 @@ def retry_failed():
                 "topicId":      topic_id,
                 "type":         "news",
                 "region":       "global",
-                "trusted":      any(d in url for d in domains) if domains else False,
+                "trusted":      _is_trusted(url),
                 "ingestSource": "gdelt",
                 "fetchedAt":    datetime.now(timezone.utc).isoformat()
             })
@@ -473,14 +473,12 @@ def retag_articles():
         if os.path.exists(SOURCES_FILE):
             with open(SOURCES_FILE, "r", encoding="utf-8") as f:
                 srcs = json.load(f)
-            # sources.json is structured as {country: {local:[...], global:[...], journals:[...]}}
-            for country_data in srcs.values():
-                if isinstance(country_data, dict):
-                    for group in country_data.values():
-                        if isinstance(group, list):
-                            for src in group:
-                                if isinstance(src, dict) and src.get("domain"):
-                                    trusted_domains.add(src["domain"].lower())
+            # sources.json: {group_name: [{id, domain, ...}, ...]}
+            for group in srcs.values():
+                if isinstance(group, list):
+                    for src in group:
+                        if isinstance(src, dict) and src.get("domain"):
+                            trusted_domains.add(src["domain"].lower())
 
         if not trusted_domains:
             return jsonify({"ok": False, "error": "No domains found in sources.json"}), 400
@@ -527,6 +525,30 @@ def save():
     if "failedQueries" in data:
         save_failed_queries(data["failedQueries"])
     return jsonify({"ok": True, "saved": len(data.get("articles", []))})
+
+def _load_trusted_domains():
+    """Load all trusted domains from sources.json into a set."""
+    domains = set()
+    try:
+        if os.path.exists(SOURCES_FILE):
+            with open(SOURCES_FILE, "r", encoding="utf-8") as f:
+                srcs = json.load(f)
+            for group in srcs.values():
+                if isinstance(group, list):
+                    for src in group:
+                        if isinstance(src, dict) and src.get("domain"):
+                            domains.add(src["domain"].lower())
+    except Exception:
+        pass
+    return domains
+
+def _is_trusted(url):
+    """Check if URL belongs to a trusted source domain."""
+    if not url:
+        return False
+    url_lower = url.lower()
+    return any(d in url_lower for d in _load_trusted_domains())
+
 
 @app.route("/collect", methods=["POST"])
 def collect():
@@ -578,7 +600,7 @@ def collect():
                                     "topicId":   tid,
                                     "type":      "news",
                                     "region":    "global",
-                                    "trusted":   any(d in url for d in domains) if domains else False,
+                                    "trusted":   _is_trusted(url),
                                     "ingestSource": "ddg",
                                     "fetchedAt": datetime.now(timezone.utc).isoformat()
                                 })
