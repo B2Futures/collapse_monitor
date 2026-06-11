@@ -21,6 +21,8 @@ FAILED_QUERIES_FILE = os.path.join(DATA_DIR, "failed_queries.json")
 SOURCES_FILE        = os.path.join(BASE_DIR, "sources.json")  # ships with the app, user-editable
 THRESHOLDS_FILE     = os.path.join(DATA_DIR, "thresholds.json")
 LOCAL_MONITOR_FILE  = os.path.join(DATA_DIR, "local_monitor.json")
+RESILIENCE_FILE     = os.path.join(DATA_DIR, "resilience.json")
+FASCISM_FILE        = os.path.join(DATA_DIR, "fascism.json")
 LOCAL_BRIEFING_FILE  = os.path.join(DATA_DIR, "local_briefing.json")
 LOCAL_ARTICLES_FILE  = os.path.join(DATA_DIR, "local_articles.json")
 
@@ -509,6 +511,46 @@ def retag_articles():
 
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/fascism", methods=["GET", "POST"])
+def fascism():
+    if request.method == "POST":
+        data = request.get_json() or {}
+        try:
+            with open(FASCISM_FILE, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            return jsonify({"ok": True})
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e)}), 500
+    else:
+        try:
+            if os.path.exists(FASCISM_FILE):
+                with open(FASCISM_FILE, "r", encoding="utf-8") as f:
+                    return jsonify(json.load(f))
+        except Exception:
+            pass
+        return jsonify({})
+
+
+@app.route("/resilience", methods=["GET", "POST"])
+def resilience():
+    if request.method == "POST":
+        data = request.get_json() or {}
+        try:
+            with open(RESILIENCE_FILE, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            return jsonify({"ok": True})
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e)}), 500
+    else:
+        try:
+            if os.path.exists(RESILIENCE_FILE):
+                with open(RESILIENCE_FILE, "r", encoding="utf-8") as f:
+                    return jsonify(json.load(f))
+        except Exception:
+            pass
+        return jsonify({})
 
 
 @app.route("/load")
