@@ -1439,6 +1439,26 @@ var THRESHOLD_DEFS = [
   {id:'precipitation', label:'Precipitation & Drought',
    threshold:'Wet regions getting wetter, dry regions drier; intensification ~7% per degree of warming',
    why:'Altered precipitation drives food insecurity, water conflicts, flood damage, and wildfire risk simultaneously. Agricultural systems evolved for historical patterns that no longer hold.'},
+
+  // Additional planetary boundaries
+  {id:'amoc',         label:'AMOC Circulation',
+   threshold:'Stable AMOC strength; >15% weakening is critical, collapse is irreversible on century timescales',
+   why:'The Atlantic Meridional Overturning Circulation drives heat distribution across the Northern Hemisphere. Significant weakening would shift European climates, disrupt monsoons, raise sea levels on US East Coast, and push Arctic warming into feedback loops.'},
+  {id:'amazon',        label:'Amazon Rainforest',
+   threshold:'Tipping point at ~20-25% total deforestation; current estimates ~17-18% deforested',
+   why:'Beyond the tipping point the rainforest transitions to savanna, releasing centuries of stored carbon and collapsing the regional rainfall cycle that sustains South American agriculture. Irreversible within decades once triggered.'},
+  {id:'ozone',         label:'Stratospheric Ozone',
+   threshold:'Full recovery to pre-1980 levels expected ~2065; ozone hole area should track toward zero',
+   why:'While recovering under the Montreal Protocol, ozone depletion remains elevated over Antarctica. Emerging threats from industrial gases and rocket emissions could slow recovery and increase UV radiation reaching Earth.'},
+  {id:'freshwater',    label:'Global Freshwater Use',
+   threshold:'Sustainable withdrawal ~4,000 km³/year; current ~4,600 km³/year — already in overshoot',
+   why:'Groundwater depletion is accelerating in breadbasket regions. Aquifer exhaustion in key agricultural zones would cascade into food system failure within years of crossing local thresholds.'},
+  {id:'biodiversity',  label:'Biodiversity & Species Loss',
+   threshold:'Safe extinction rate: <10 species per million per year; current rate 100-1,000x above background',
+   why:'Biodiversity underpins ecosystem services — pollination, water filtration, soil health, disease regulation. Cascade extinctions can reach tipping points where ecosystems lose function entirely.'},
+  {id:'nitrogen',      label:'Nitrogen/Phosphorus Cycle',
+   threshold:'Safe nitrogen fixation: ~62 Tg N/year; current ~120 Tg N/year. Phosphorus approaching peak supply.',
+   why:'Fertilizer overshoot creates dead zones in oceans and lakes, collapses fisheries, and contaminates drinking water. Phosphorus is non-renewable — peak supply threatens long-term food production capacity.'},
 ];
 
 var LOCAL_SECTORS = [
@@ -1509,6 +1529,9 @@ function App() {
   var _qTopic      = useState('all');      var qTopic = _qTopic[0], setQTopic = _qTopic[1];
   var _srcFilter   = useState('all');      var srcFilter = _srcFilter[0], setSrcFilter = _srcFilter[1];
   var _archTrustFilter = useState('all'); var archTrustFilter = _archTrustFilter[0], setArchTrustFilter = _archTrustFilter[1];
+  var _resScale      = useState('world');  var resScale = _resScale[0],     setResScale     = _resScale[1];
+  var _resResult     = useState(null);     var resResult = _resResult[0],   setResResult    = _resResult[1];
+  var _resRefreshing = useState(false);    var resRefreshing = _resRefreshing[0], setResRefreshing = _resRefreshing[1];
   var _retagging    = useState(false);    var retagging = _retagging[0],    setRetagging    = _retagging[1];
   var _retagResult  = useState(null);     var retagResult = _retagResult[0], setRetagResult  = _retagResult[1];
   var _localCity      = useState('');      var localCity = _localCity[0], setLocalCity = _localCity[1];
@@ -3211,7 +3234,7 @@ function App() {
       setThreshRefreshing(true); setErr('');
       var artCtx=filteredArts.length>0
         ? 'Archive has '+filteredArts.length+(srcFilter!=='all'?' ('+srcFilter+' only)':'')+' articles. Recent:\n'+
-          filteredArts.slice().sort(function(a,b){return(b.date||'').localeCompare(a.date||'');}).slice(0,20)
+          filteredArts.slice().sort(function(a,b){return(b.date||'').localeCompare(a.date||'');}).slice(0,40)
             .map(function(a){return a.date+' | '+a.title;}).join('\n')
         : 'No archive.';
       var sys='You are a climate scientist. Today is '+todayStr+'. Return only valid JSON.';
@@ -3222,10 +3245,10 @@ function App() {
         +'{"assessments":{"temperature":{"status":"current value","signal":"critical|elevated|moderate|low",'
         +'"trend":"accelerating|stable|slow|recovering","blurb":"2-3 sentences: current vs threshold, trajectory"},'
         +'"ghg":{...},...},"updatedAt":"'+todayStr+'"}\n'
-        +'All 12 ids: temperature,ghg,sea_level,ocean_heat,ocean_acidity,ice_sheets,glaciers,sea_ice,snow_cover,permafrost,energy_balance,precipitation\n'
+        +'All 18 ids: temperature,ghg,sea_level,ocean_heat,ocean_acidity,ice_sheets,glaciers,sea_ice,snow_cover,permafrost,energy_balance,precipitation,amoc,amazon,ozone,freshwater,biodiversity,nitrogen\n'
         +'signal: critical=threshold breached/imminent, elevated=approaching, moderate=concerning trend, low=within safe range\n'
-        +'Use actual scientific values. Be specific.';
-      callLM(sys,prompt,4000)
+        +'Use actual scientific values and any relevant article evidence. Be specific.';
+      callLM(sys,prompt,8000)
         .then(function(txt){
           var p=parseJson(txt);
           if(!p||!p.assessments){setErr('Could not parse threshold JSON. Try again.');return;}
@@ -3648,14 +3671,14 @@ function App() {
   }
 
   var NAV=[{id:'monitor',ic:'[~]',label:'Monitor'},
-    {id:'interrogate',ic:'[?]',label:'Interrogate'},{id:'patterns',ic:'[^]',label:'Patterns'},{id:'thresholds',ic:'[T]',label:'Thresholds'},{id:'national',ic:'[N]',label:'National'},{id:'local',ic:'[L]',label:'Local'},{id:'intake',ic:'[o]',label:'Intake'},{id:'keywords',ic:'[k]',label:'Keywords'},{id:'sources',ic:'[#]',label:'Sources'},{id:'archive',ic:'[=]',label:'Archive'}];
-  var TITLES={monitor:'Signal Monitor',intake:'Data Intake',archive:'Article Archive',interrogate:'Interrogate',patterns:'Pattern Analysis',sources:'Source Manager',thresholds:'Planetary Thresholds',national:'National Monitor',local:'Local Monitor',keywords:'Keyword Manager'};
+    {id:'interrogate',ic:'[?]',label:'Interrogate'},{id:'patterns',ic:'[^]',label:'Patterns'},{id:'thresholds',ic:'[T]',label:'Thresholds'},{id:'resilience',ic:'[R]',label:'Resilience'},{id:'national',ic:'[N]',label:'National'},{id:'local',ic:'[L]',label:'Local'},{id:'intake',ic:'[o]',label:'Intake'},{id:'keywords',ic:'[k]',label:'Keywords'},{id:'sources',ic:'[#]',label:'Sources'},{id:'archive',ic:'[=]',label:'Archive'}];
+  var TITLES={monitor:'Signal Monitor',intake:'Data Intake',archive:'Article Archive',interrogate:'Interrogate',patterns:'Pattern Analysis',sources:'Source Manager',thresholds:'Planetary Thresholds',resilience:'Resilience Index',national:'National Monitor',local:'Local Monitor',keywords:'Keyword Manager'};
 
   return h('div',{className:'app'},
     h('aside',{className:'sb'},
       h('div',{className:'sb-logo'},
         h('div',{className:'sb-logo-t'},'Collapse',h('br'),'Monitor'),
-        h('div',{className:'sb-logo-s'},'Systemic Risk Tracker v0.4')),
+        h('div',{className:'sb-logo-s'},'Systemic Risk Tracker v0.5')),
       h('nav',{className:'sb-nav'},
         NAV.map(function(n){
           return h('div',{key:n.id,className:'sb-ni '+(view===n.id?'active':''),onClick:function(){setView(n.id);}},
@@ -3680,6 +3703,7 @@ function App() {
         view==='keywords'&&vKeywords(),
         view==='sources'&&vSources(),
         view==='thresholds'&&vThresholds(),
+        view==='resilience'&&vResilience(),
         view==='national'&&vLocal(),
         view==='local'&&vLocalCommunity())));
 
@@ -4151,6 +4175,236 @@ function App() {
                             style:{fontSize:'10px',color:'rgba(255,45,74,.8)',borderColor:'rgba(255,45,74,.3)'},
                             onClick:function(){removeKwAt(actualIdx);}}, '[x]')));
                 })))));
+  }
+
+
+  // ── RESILIENCE INDEX ─────────────────────────────────────────────────────
+
+  function runResilience() {
+    if (resRefreshing) return;
+    setResRefreshing(true); setErr('');
+    var now = new Date();
+    var todayStr = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
+
+    var SECTORS = [
+      'Governance & Political Stability',
+      'Economic Health & Employment',
+      'Food & Water Security',
+      'Energy & Infrastructure Reliability',
+      'Public Health & Healthcare Access',
+      'Social Cohesion & Community Trust',
+      'Housing & Cost of Living'
+    ];
+
+    var scaleLabel, artCtx;
+
+    if (resScale === 'world') {
+      scaleLabel = 'Global / World';
+      var pool = filteredArts.slice().sort(function(a,b){return(b.date||'').localeCompare(a.date||'');}).slice(0,60);
+      artCtx = pool.length>0
+        ? 'GLOBAL ARCHIVE ('+filteredArts.length+' articles):\n'+pool.map(function(a){return(a.date||'')+' | '+(a.title||'');}).join('\n')
+        : 'No articles in archive.';
+
+    } else if (resScale === 'country') {
+      var cLabel = country || 'selected country';
+      scaleLabel = cLabel;
+      var cPool = filteredArts.filter(function(a){
+        return (a.source||'').toLowerCase().includes((country||'').toLowerCase().split(' ')[0])
+          || (a.title||'').toLowerCase().includes((country||'').toLowerCase());
+      }).concat(filteredArts).slice(0,60);
+      artCtx = cPool.length>0
+        ? 'ARTICLES FOR '+cLabel.toUpperCase()+':\n'+cPool.slice(0,50).map(function(a){return(a.date||'')+' | '+(a.title||'');}).join('\n')
+        : 'No articles found.';
+
+    } else {
+      // local
+      var locLabel = [localCity,localCounty?localCounty+' County':'',localState].filter(Boolean).join(', ') || 'local area';
+      scaleLabel = locLabel;
+      var localPool = localArts.filter(function(a){return !a.dismissed;});
+      if (!localPool.length) {
+        setErr('No local articles. Collect local news from the Local tab first.');
+        setResRefreshing(false);
+        return;
+      }
+      artCtx = 'LOCAL ARTICLES FOR '+locLabel.toUpperCase()+':\n'
+        +localPool.slice().sort(function(a,b){return(b.date||'').localeCompare(a.date||'');}).slice(0,50)
+          .map(function(a){return(a.date||'')+' | '+(a.title||'');}).join('\n');
+    }
+
+    var sys = 'You are a societal resilience analyst. Today: '+todayStr+'. Scale: '+scaleLabel+'.'
+      +'\nOutput ONLY a raw JSON object. No markdown, no explanation. Start with { end with }.'
+      +'\nKeys:'
+      +'\n  scale: "'+scaleLabel+'"'
+      +'\n  updatedAt: "'+todayStr+'"'
+      +'\n  overallSignal: one of: critical | elevated | moderate | low'
+      +'\n  overallScore: integer 0-100 (0=complete collapse, 100=fully resilient)'
+      +'\n  summary: 3-4 sentence assessment of overall societal resilience at this scale'
+      +'\n  sectors: array of 7 objects, one per sector below, each with:'
+      +'\n    name, score (0-100), signal (critical|elevated|moderate|low),'
+      +'\n    trend (accelerating|stable|slow|recovering),'
+      +'\n    status (1 word: critical|warning|stable|active|improving),'
+      +'\n    keyDevelopment (1 sentence, specific event or trend from articles),'
+      +'\n    detail (2 sentences of deeper context)'
+      +'\n  Sectors: '+SECTORS.join(', ')
+      +'\n  strengths: array of 3 strings (what is working, sources of resilience)'
+      +'\n  stressors: array of 4 strings (key collapse risks, clickable for article drill)'
+      +'\n  watchItems: array of 4 strings (developments to monitor in next 30-90 days)'
+      +'\n  localWeather: (ONLY if scale is local) object with fields:'
+      +'\n    recentExtremes (array of up to 3 strings: flood/heat/drought/storm events from articles),'
+      +'\n    climateRisk (1 sentence on local climate trajectory),'
+      +'\n    infrastructureImpact (1 sentence on weather impact on local systems)'
+      +'\nOmit localWeather key if scale is not local.';
+
+    var prompt = 'Assess societal resilience for: '+scaleLabel
+      +'\n\nARTICLE CONTEXT:\n'+artCtx
+      +'\n\nReturn the JSON object now.';
+    callLM(sys, prompt, 7000)
+      .then(function(txt){
+        var clean = txt.replace(/```json|```/g,'').trim();
+        var start = clean.indexOf('{'), end = clean.lastIndexOf('}');
+        if (start<0||end<0) throw new Error('No JSON found');
+        var p = JSON.parse(clean.slice(start, end+1));
+        p.sectors = p.sectors||[];
+        p.strengths = p.strengths||[];
+        p.stressors = p.stressors||[];
+        p.watchItems = p.watchItems||[];
+        p.scale = p.scale||scaleLabel;
+        setResResult(p);
+      })
+      .catch(function(e){setErr('Resilience analysis failed: '+e.message);})
+      .finally(function(){setResRefreshing(false);});
+  }
+
+  function vResilience() {
+    var SIGCB = {'critical':'rgba(255,45,74,.12)','elevated':'rgba(255,119,51,.1)','moderate':'rgba(255,208,0,.08)','low':'rgba(0,232,122,.08)'};
+    var sc = SIGCOL[resResult&&resResult.overallSignal]||'#546e7a';
+    var scaleOpts = [
+      {id:'world',  label:'[~] World',   desc:'Global societal resilience from national archive'},
+      {id:'country',label:'[N] Country', desc:'Country-level resilience for '+( country||'selected country')},
+      {id:'local',  label:'[L] Local',   desc:'Community resilience for '+([localCity,localState].filter(Boolean).join(', ')||'your local area')+' — includes weather'}
+    ];
+
+    return h('div',null,
+      // ── Header ──────────────────────────────────────────────────────────────
+      h('div',{style:{display:'flex',alignItems:'center',gap:'10px',marginBottom:'14px',flexWrap:'wrap'}},
+        h('div',{style:{fontFamily:'var(--h)',fontSize:'18px',fontWeight:700,letterSpacing:'2px',color:'var(--text)'}},'[R] Resilience Index'),
+        h('span',{style:{fontFamily:'var(--m)',fontSize:'11px',color:'var(--muted)'}},'v0.5')),
+
+      // ── Scale selector ────────────────────────────────────────────────────
+      h('div',{className:'g3 mb12'},
+        scaleOpts.map(function(opt){
+          var active = resScale===opt.id;
+          return h('div',{key:opt.id,
+            style:{padding:'12px 14px',borderRadius:'4px',cursor:'pointer',
+              background:active?'rgba(0,180,216,.08)':'var(--s2)',
+              border:'1px solid '+(active?'var(--cyan)':'var(--border)'),
+              transition:'all .15s'},
+            onClick:function(){setResScale(opt.id); setResResult(null);}},
+            h('div',{style:{fontFamily:'var(--m)',fontSize:'12px',color:active?'var(--cyan)':'var(--text)',
+              fontWeight:active?700:400,letterSpacing:'1px',marginBottom:'4px'}},opt.label),
+            h('div',{style:{fontSize:'11px',color:'var(--muted)'}},opt.desc));
+        })),
+
+      // ── Run button ────────────────────────────────────────────────────────
+      h('div',{style:{display:'flex',alignItems:'center',gap:'10px',marginBottom:'16px',flexWrap:'wrap'}},
+        h('button',{className:'btn btn-p',disabled:resRefreshing,onClick:runResilience},
+          resRefreshing
+            ? h('span',null,h('span',{className:'spin'},'@ '),'Analyzing...')
+            : '[R] Run Resilience Analysis'),
+        resResult&&h('span',{style:{fontFamily:'var(--m)',fontSize:'11px',color:'var(--muted)'}},
+          'Last run: '+resResult.updatedAt+' — '+resResult.scale)),
+
+      // ── Results ────────────────────────────────────────────────────────────
+      resRefreshing&&h('div',{className:'card',style:{textAlign:'center',padding:'40px'}},
+        h('span',{className:'spin',style:{fontSize:'24px'}},'@'),
+        h('div',{style:{marginTop:'12px',color:'var(--muted)'}},
+          'Analyzing societal resilience for '+scaleOpts.find(function(o){return o.id===resScale;}).label+' ...')),
+
+      resResult&&!resRefreshing&&h('div',null,
+        // Overall signal bar
+        h('div',{className:'card mb12',style:{background:SIGCB[resResult.overallSignal]||'var(--s2)'}},
+          h('div',{style:{display:'flex',alignItems:'center',gap:'12px',marginBottom:'8px'}},
+            h('div',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--muted)',letterSpacing:'1px'}},'OVERALL RESILIENCE'),
+            h('span',{style:{fontFamily:'var(--h)',fontSize:'16px',fontWeight:700,color:sc,
+              padding:'2px 10px',borderRadius:'3px',border:'1px solid '+sc+'60',letterSpacing:'2px'}},
+              (resResult.overallSignal||'').toUpperCase()),
+            h('span',{style:{fontFamily:'var(--m)',fontSize:'22px',color:sc,fontWeight:700}},
+              resResult.overallScore||'—'),
+            h('span',{style:{fontFamily:'var(--m)',fontSize:'11px',color:'var(--muted)'}},' / 100')),
+          h('div',{style:{fontSize:'13px',color:'var(--text)',lineHeight:'1.65',marginBottom:'6px'}},
+            resResult.summary),
+          // Score bar
+          h('div',{style:{height:'6px',borderRadius:'3px',background:'var(--s3)',overflow:'hidden',marginTop:'8px'}},
+            h('div',{style:{height:'100%',width:(resResult.overallScore||0)+'%',
+              background:'linear-gradient(90deg,'+sc+','+sc+'aa)',borderRadius:'3px',
+              transition:'width .5s ease'}}))),
+
+        // Sector grid
+        h('div',{className:'slabel'},'Sector Status'),
+        h('div',{className:'g2 mb12'},
+          (resResult.sectors||[]).map(function(s,i){
+            var ssc = SIGCOL[s.signal]||'#546e7a';
+            return h('div',{key:i,style:{padding:'12px 14px',borderRadius:'4px',
+              background:'var(--s2)',border:'1px solid var(--border)',marginBottom:'8px'}},
+              h('div',{style:{display:'flex',alignItems:'center',gap:'8px',marginBottom:'6px'}},
+                h('div',{style:{flex:1,fontSize:'13px',fontWeight:600,color:'var(--text)'}},s.name),
+                s.score!==undefined&&h('span',{style:{fontFamily:'var(--m)',fontSize:'11px',color:ssc,
+                  fontWeight:700}},s.score),
+                h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',padding:'1px 6px',borderRadius:'2px',
+                  background:ssc+'15',border:'1px solid '+ssc+'40',color:ssc}},s.signal||''),
+                h('span',{style:{fontSize:'11px',color:SIGCOL[s.trend==='accelerating'?'critical':s.trend==='recovering'?'low':'moderate']||'var(--muted)'}},
+                  {accelerating:'↑↑',stable:'→',slow:'↓',recovering:'↑'}[s.trend]||'')),
+              h('div',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--dim)',marginBottom:'4px'}},
+                (s.status||'').toUpperCase()),
+              h('div',{style:{fontSize:'12px',color:'var(--cyan)',marginBottom:'4px'}},s.keyDevelopment),
+              h('div',{style:{fontSize:'11px',color:'var(--muted)',lineHeight:'1.5'}},s.detail));
+          })),
+
+        // Right column: strengths / stressors / watch / weather
+        h('div',{className:'g2'},
+          h('div',null,
+            (resResult.strengths||[]).length>0&&h('div',{className:'card mb12'},
+              h('div',{className:'card-h',style:{color:'var(--green)'}},'Strengths'),
+              h('ul',{className:'bullets'},
+                (resResult.strengths||[]).map(function(s,i){
+                  return h('li',{key:i,style:{color:'var(--green)',marginBottom:'4px'}},s);
+                }))),
+            resResult.localWeather&&h('div',{className:'card mb12'},
+              h('div',{className:'card-h',style:{color:'#00b4d8'}},'Local Weather & Climate'),
+              (resResult.localWeather.recentExtremes||[]).length>0&&h('div',{style:{marginBottom:'8px'}},
+                (resResult.localWeather.recentExtremes||[]).map(function(e,i){
+                  return h('div',{key:i,style:{fontSize:'12px',color:'#ff8a8a',marginBottom:'3px',
+                    padding:'4px 8px',background:'rgba(255,45,74,.06)',borderRadius:'3px'}},
+                    '⚠ '+e);
+                })),
+              resResult.localWeather.climateRisk&&h('div',{style:{fontSize:'12px',color:'var(--text)',marginBottom:'6px',lineHeight:'1.5'}},
+                resResult.localWeather.climateRisk),
+              resResult.localWeather.infrastructureImpact&&h('div',{style:{fontSize:'12px',color:'var(--muted)',lineHeight:'1.5'}},
+                resResult.localWeather.infrastructureImpact))),
+
+          h('div',null,
+            (resResult.stressors||[]).length>0&&h('div',{className:'card mb12'},
+              h('div',{className:'card-h',style:{color:'#ff6b7d'}},'Key Stressors'),
+              h('div',{style:{fontSize:'11px',color:'var(--dim)',fontFamily:'var(--m)',marginBottom:'8px'}},'Click any item to find supporting articles'),
+              h('div',null,(resResult.stressors||[]).map(function(r,i){
+                var active=drillQuery===r;
+                return h('div',{key:i,style:{
+                    padding:'7px 10px',marginBottom:'5px',borderRadius:'3px',cursor:'pointer',
+                    background:active?'rgba(255,45,74,.08)':'var(--s3)',
+                    border:'1px solid '+(active?'rgba(255,45,74,.4)':'var(--border)'),
+                    fontSize:'12px',color:active?'#ff6b7d':'#ff8a8a',lineHeight:'1.5'},
+                  onClick:function(){openDrill(r);}},
+                  h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:active?'#ff6b7d':'var(--dim)',marginRight:'6px'}},'[!]'),r);
+              }))),
+            (resResult.watchItems||[]).length>0&&h('div',{className:'card mb12'},
+              h('div',{className:'card-h',style:{color:'#ffd000'}},'Watch Items — Next 30-90 Days'),
+              h('div',null,(resResult.watchItems||[]).map(function(r,i){
+                return h('div',{key:i,style:{padding:'6px 10px',marginBottom:'4px',borderRadius:'3px',
+                    background:'var(--s3)',border:'1px solid var(--border)',
+                    fontSize:'12px',color:'#ffe066',lineHeight:'1.5'}},
+                  h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--dim)',marginRight:'6px'}},'[~]'),r);
+              }))),
+            renderDrillPanel()))));
   }
 
 
