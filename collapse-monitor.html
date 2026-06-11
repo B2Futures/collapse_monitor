@@ -4450,6 +4450,8 @@ function App() {
   function runFascism() {
     if (fascRefreshing) return;
     setFascRefreshing(true); setErr('');
+    var now = new Date();
+    var todayStr = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
 
     var artCtx = filteredArts.length > 0
       ? 'ARTICLE ARCHIVE ('+filteredArts.length+' total):\n'
