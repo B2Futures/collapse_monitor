@@ -25,6 +25,9 @@ RESILIENCE_FILE     = os.path.join(DATA_DIR, "resilience.json")
 FASCISM_FILE        = os.path.join(DATA_DIR, "fascism.json")
 EVENTS_FILE         = os.path.join(DATA_DIR, "events.json")
 FRED_FILE           = os.path.join(DATA_DIR, "fred_cache.json")
+NOAA_FILE           = os.path.join(DATA_DIR, "noaa_cache.json")
+AIS_FILE            = os.path.join(DATA_DIR, "ais_cache.json")
+API_KEYS_FILE       = os.path.join(DATA_DIR, "api_keys.json")
 LOCAL_BRIEFING_FILE  = os.path.join(DATA_DIR, "local_briefing.json")
 LOCAL_ARTICLES_FILE  = os.path.join(DATA_DIR, "local_articles.json")
 
@@ -515,6 +518,319 @@ def retag_articles():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+
+
+# ── API KEYS ──────────────────────────────────────────────────────────────────
+
+@app.route("/api-keys", methods=["GET", "POST"])
+def api_keys():
+    if request.method == "POST":
+        data = request.get_json() or {}
+        try:
+            existing = {}
+            if os.path.exists(API_KEYS_FILE):
+                with open(API_KEYS_FILE, "r", encoding="utf-8") as f:
+                    existing = json.load(f)
+            existing.update(data)
+            with open(API_KEYS_FILE, "w", encoding="utf-8") as f:
+                json.dump(existing, f, indent=2)
+            return jsonify({"ok": True})
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e)}), 500
+    else:
+        try:
+            if os.path.exists(API_KEYS_FILE):
+                with open(API_KEYS_FILE, "r", encoding="utf-8") as f:
+                    return jsonify(json.load(f))
+        except Exception:
+            pass
+        return jsonify({})
+
+
+def load_api_keys():
+    """Load API keys from disk."""
+    try:
+        if os.path.exists(API_KEYS_FILE):
+            with open(API_KEYS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+
+
+# ── NOAA NCDC ─────────────────────────────────────────────────────────────────
+
+STATE_FIPS = {'alabama': '01', 'alaska': '02', 'arizona': '04', 'arkansas': '05', 'california': '06', 'colorado': '08', 'connecticut': '09', 'delaware': '10', 'florida': '12', 'georgia': '13', 'hawaii': '15', 'idaho': '16', 'illinois': '17', 'indiana': '18', 'iowa': '19', 'kansas': '20', 'kentucky': '21', 'louisiana': '22', 'maine': '23', 'maryland': '24', 'massachusetts': '25', 'michigan': '26', 'minnesota': '27', 'mississippi': '28', 'missouri': '29', 'montana': '30', 'nebraska': '31', 'nevada': '32', 'new hampshire': '33', 'new jersey': '34', 'new mexico': '35', 'new york': '36', 'north carolina': '37', 'north dakota': '38', 'ohio': '39', 'oklahoma': '40', 'oregon': '41', 'pennsylvania': '42', 'rhode island': '44', 'south carolina': '45', 'south dakota': '46', 'tennessee': '47', 'texas': '48', 'utah': '49', 'vermont': '50', 'virginia': '51', 'washington': '53', 'west virginia': '54', 'wisconsin': '55', 'wyoming': '56'}
+
+def noaa_request(path, token, params=None):
+    """Make a NOAA CDO API request."""
+    base = "https://www.ncdc.noaa.gov/cdo-web/api/v2"
+    url = base + path
+    if params:
+        url += "?" + urllib.parse.urlencode(params)
+    req = urllib.request.Request(url, headers={"token": token, "User-Agent": "CollapseMonitor/1.0"})
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+@app.route("/noaa-data", methods=["GET"])
+def noaa_data():
+    """Fetch NOAA climate data for user location. Cached 24h."""
+    try:
+        # Check cache
+        if os.path.exists(NOAA_FILE):
+            with open(NOAA_FILE, "r", encoding="utf-8") as f:
+                cached = json.load(f)
+            age_h = (time.time() - cached.get("fetchedAt", 0)) / 3600
+            if age_h < 24:
+                return jsonify(cached)
+
+        keys = load_api_keys()
+        token = keys.get("noaa", "")
+        if not token:
+            return jsonify({"error": "No NOAA API key set. Add it on the Intake page."})
+
+        settings = load_settings()
+        state_name = (settings.get("localState") or "").lower().strip()
+        fips = STATE_FIPS.get(state_name)
+        if not fips:
+            return jsonify({"error": f"Cannot find FIPS for state: {state_name}. Set your state on the Intake page."})
+
+        # Find stations in this state with temperature data
+        stations_resp = noaa_request("/stations", token, {
+            "locationid": f"FIPS:{fips}",
+            "datatypeid":  "TMAX",
+            "limit":       10,
+            "sortfield":   "maxdate",
+            "sortorder":   "desc"
+        })
+        stations = stations_resp.get("results", [])
+        if not stations:
+            return jsonify({"error": f"No NOAA stations found for state FIPS {fips}"})
+
+        station = stations[0]  # Most recently active station
+        station_id = station["id"]
+
+        # Fetch last 365 days of TMAX, TMIN, PRCP
+        from datetime import timedelta
+        end_date   = datetime.now().strftime("%Y-%m-%d")
+        start_date = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
+
+        data_resp = noaa_request("/data", token, {
+            "datasetid":  "GHCND",
+            "stationid":  station_id,
+            "startdate":  start_date,
+            "enddate":    end_date,
+            "datatypeid": "TMAX,TMIN,PRCP",
+            "limit":      1000,
+            "units":      "standard"
+        })
+        records = data_resp.get("results", [])
+
+        # Organise by type
+        by_type = {"TMAX": [], "TMIN": [], "PRCP": []}
+        for r in records:
+            dt = r.get("datatype")
+            if dt in by_type:
+                by_type[dt].append({"date": r["date"][:10], "value": r["value"]})
+
+        # Compute anomalies: current month vs same-month historical
+        def month_anomaly(series, n_baseline=6):
+            """Compare last month's mean to prior n_baseline months."""
+            if len(series) < 30:
+                return None, None, None
+            vals = [x["value"] for x in series]
+            recent  = statistics.mean(vals[-30:])   # last 30 obs
+            baseline_vals = vals[:-30]
+            if not baseline_vals:
+                return round(recent, 1), None, None
+            baseline = statistics.mean(baseline_vals)
+            try:
+                sd = statistics.stdev(baseline_vals)
+            except Exception:
+                sd = 0
+            z = (recent - baseline) / sd if sd > 0 else 0.0
+            return round(recent, 1), round(z, 2), round(baseline, 1)
+
+        tmax_cur, tmax_z, tmax_base = month_anomaly(by_type["TMAX"])
+        tmin_cur, tmin_z, tmin_base = month_anomaly(by_type["TMIN"])
+        prcp_cur, prcp_z, prcp_base = month_anomaly(by_type["PRCP"])
+
+        def z_to_signal(z, invert=False):
+            if z is None: return "unknown"
+            v = z if not invert else -z
+            if v > 2.5: return "critical"
+            if v > 1.5: return "elevated"
+            if v > 0.5: return "moderate"
+            return "low"
+
+        payload = {
+            "station":   {"id": station_id, "name": station.get("name",""), "state": state_name.title()},
+            "updatedAt": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+            "fetchedAt": time.time(),
+            "indicators": [
+                {
+                    "id": "TMAX", "label": "Max Temperature",
+                    "current": tmax_cur, "baseline": tmax_base, "zscore": tmax_z,
+                    "unit": "°F", "signal": z_to_signal(tmax_z, invert=True),
+                    "trend": by_type["TMAX"][-30:]
+                },
+                {
+                    "id": "TMIN", "label": "Min Temperature",
+                    "current": tmin_cur, "baseline": tmin_base, "zscore": tmin_z,
+                    "unit": "°F", "signal": z_to_signal(tmin_z, invert=True),
+                    "trend": by_type["TMIN"][-30:]
+                },
+                {
+                    "id": "PRCP", "label": "Precipitation",
+                    "current": prcp_cur, "baseline": prcp_base, "zscore": prcp_z,
+                    "unit": "in", "signal": z_to_signal(prcp_z),
+                    "trend": by_type["PRCP"][-30:]
+                }
+            ]
+        }
+        with open(NOAA_FILE, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2)
+        return jsonify(payload)
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/noaa-refresh", methods=["POST"])
+def noaa_refresh():
+    if os.path.exists(NOAA_FILE):
+        os.remove(NOAA_FILE)
+    return noaa_data()
+
+
+
+# ── AISSTREAM.IO ──────────────────────────────────────────────────────────────
+
+MAJOR_PORTS = [
+    {"name": "Singapore",      "bbox": [[1.1, 103.6], [1.5, 104.1]]},
+    {"name": "Shanghai",       "bbox": [[30.5, 121.0], [31.5, 122.0]]},
+    {"name": "Rotterdam",      "bbox": [[51.8, 3.9], [52.1, 4.7]]},
+    {"name": "Los Angeles",    "bbox": [[33.5, -118.5], [34.0, -118.0]]},
+    {"name": "Houston",        "bbox": [[29.5, -95.5], [29.9, -94.8]]},
+    {"name": "Hamburg",        "bbox": [[53.4, 9.7], [53.7, 10.2]]},
+    {"name": "Dubai",          "bbox": [[25.0, 55.0], [25.4, 55.5]]},
+    {"name": "New York",       "bbox": [[40.4, -74.2], [40.8, -73.8]]},
+]
+
+
+@app.route("/ais-data", methods=["GET"])
+def ais_data():
+    """Fetch AIS vessel snapshot near major ports. Cached 6h."""
+    try:
+        if os.path.exists(AIS_FILE):
+            with open(AIS_FILE, "r", encoding="utf-8") as f:
+                cached = json.load(f)
+            age_h = (time.time() - cached.get("fetchedAt", 0)) / 3600
+            if age_h < 6:
+                return jsonify(cached)
+
+        keys = load_api_keys()
+        api_key = keys.get("aisstream", "")
+        if not api_key:
+            return jsonify({"error": "No AISStream API key set. Add it on the Intake page."})
+
+        # Check websocket-client is available, try to install if not
+        try:
+            import websocket
+        except ImportError:
+            import subprocess, sys
+            try:
+                subprocess.check_call([sys.executable, "-m", "pip", "install",
+                                       "websocket-client", "--quiet",
+                                       "--break-system-packages"],
+                                      timeout=60)
+                import websocket
+            except Exception as install_err:
+                return jsonify({"error":
+                    "websocket-client not installed and auto-install failed. "
+                    "Run manually: pip install websocket-client. "
+                    f"Detail: {install_err}"})
+
+        import threading
+        vessel_counts = {p["name"]: 0 for p in MAJOR_PORTS}
+        vessel_details = []
+        done_event = threading.Event()
+        lock = threading.Lock()
+
+        def on_message(ws, msg):
+            try:
+                data = json.loads(msg)
+                meta = data.get("MetaData", {})
+                lat  = meta.get("latitude_deg")
+                lng  = meta.get("longitude_deg")
+                mmsi = meta.get("MMSI")
+                name = meta.get("ShipName", "").strip()
+                if lat is None or lng is None:
+                    return
+                with lock:
+                    for port in MAJOR_PORTS:
+                        bb = port["bbox"]
+                        if bb[0][0] <= lat <= bb[1][0] and bb[0][1] <= lng <= bb[1][1]:
+                            vessel_counts[port["name"]] += 1
+                    vessel_details.append({"lat": lat, "lng": lng, "mmsi": mmsi, "name": name})
+            except Exception:
+                pass
+
+        def on_open(ws):
+            sub = {
+                "APIKey": api_key,
+                "BoundingBoxes": [p["bbox"] for p in MAJOR_PORTS],
+                "FilterMessageTypes": ["PositionReport"]
+            }
+            ws.send(json.dumps(sub))
+
+        def on_error(ws, err):
+            done_event.set()
+
+        wsa = websocket.WebSocketApp(
+            "wss://stream.aisstream.io/v0/stream",
+            on_message=on_message,
+            on_open=on_open,
+            on_error=on_error
+        )
+
+        t = threading.Thread(target=wsa.run_forever)
+        t.daemon = True
+        t.start()
+        # Collect for 20 seconds
+        time.sleep(20)
+        wsa.close()
+
+        total = sum(vessel_counts.values())
+        ports_data = [
+            {"name": k, "vessels": v,
+             "signal": "critical" if v == 0 else "elevated" if v < 3 else "low"}
+            for k, v in vessel_counts.items()
+        ]
+        ports_data.sort(key=lambda x: -x["vessels"])
+
+        payload = {
+            "ports":      ports_data,
+            "totalVessels": total,
+            "sampleSeconds": 20,
+            "updatedAt":  datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+            "fetchedAt":  time.time(),
+        }
+        with open(AIS_FILE, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2)
+        return jsonify(payload)
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/ais-refresh", methods=["POST"])
+def ais_refresh():
+    if os.path.exists(AIS_FILE):
+        os.remove(AIS_FILE)
+    return ais_data()
 
 FRED_INDICATORS = [
     {"id": "UNRATE",    "label": "Unemployment Rate",        "unit": "%",   "invert": True},

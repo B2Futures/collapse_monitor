@@ -1575,6 +1575,11 @@ function App() {
   var _srcMsg      = useState('');        var srcMsg = _srcMsg[0], setSrcMsg = _srcMsg[1];
   var _srcTab      = useState('global');   var srcTab = _srcTab[0], setSrcTab = _srcTab[1];
   var _thresholds  = useState({});        var thresholds = _thresholds[0], setThresholds = _thresholds[1];
+  var _apiKeys        = useState({});       var apiKeys = _apiKeys[0],         setApiKeys       = _apiKeys[1];
+  var _apiKeysSaving  = useState(false);    var apiKeysSaving = _apiKeysSaving[0], setApiKeysSaving = _apiKeysSaving[1];
+  var _noaaData       = useState(null);     var noaaData = _noaaData[0],       setNoaaData      = _noaaData[1];
+  var _aisData        = useState(null);     var aisData = _aisData[0],         setAisData       = _aisData[1];
+  var _aisLoading     = useState(false);    var aisLoading = _aisLoading[0],   setAisLoading    = _aisLoading[1];
   var _fredData      = useState(null);     var fredData = _fredData[0],       setFredData      = _fredData[1];
   var _fredLoading   = useState(false);    var fredLoading = _fredLoading[0], setFredLoading   = _fredLoading[1];
   var _threshRefreshing = useState(false);var threshRefreshing = _threshRefreshing[0], setThreshRefreshing = _threshRefreshing[1];
@@ -1718,6 +1723,15 @@ function App() {
   function loadSrv() {
     fetchModels();
     // Load FRED economic data (cached 24h)
+    // Load API keys
+    fetch(srvUrl+'/api-keys').then(function(r){return r.json();})
+      .then(function(d){setApiKeys(d||{});}).catch(function(){});
+    // Load NOAA data (cached 24h)
+    fetch(srvUrl+'/noaa-data').then(function(r){return r.json();})
+      .then(function(d){if(d&&d.indicators) setNoaaData(d);}).catch(function(){});
+    // Load AIS data (cached 6h)
+    fetch(srvUrl+'/ais-data').then(function(r){return r.json();})
+      .then(function(d){if(d&&d.ports) setAisData(d);}).catch(function(){});
     setFredLoading(true);
     fetch(srvUrl+'/fred-data')
       .then(function(r){return r.json();})
@@ -2758,7 +2772,31 @@ function App() {
                   style:{color:total>=20?'#ff7733':total>=18?'#ffd000':'inherit'}},
                   t.label.split(' ')[0]+' ('+total+'/20)');
               })),
-            h('button',{className:'btn btn-sm',onClick:addKw},'[+]'))))));
+            h('button',{className:'btn btn-sm',onClick:addKw},'[+]')),
+      h('div',{className:'card'},
+        h('div',{className:'card-h'},'External API Keys'),
+        h('div',{style:{fontSize:'12px',color:'var(--muted)',marginBottom:'12px',lineHeight:'1.6'}},'Stored locally in ',h('span',{style:{fontFamily:'var(--m)',color:'var(--cyan)'}},'data/api_keys.json'),'. Never sent anywhere except the target API.'),
+        h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'16px'}},
+          h('div',null,
+            h('div',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--muted)',letterSpacing:'1px',marginBottom:'5px'}},'NOAA NCDC TOKEN'),
+            h('div',{style:{fontSize:'11px',color:'var(--dim)',marginBottom:'6px'}},'Climate data. Free token at ',h('span',{style:{fontFamily:'var(--m)',color:'var(--cyan)'}},'ncdc.noaa.gov/cdo-web/token')),
+            h('div',{style:{display:'flex',gap:'6px',alignItems:'center'}},
+              h('input',{className:'inp',style:{flex:1,fontSize:'12px'},type:'text',value:apiKeys.noaa||'',placeholder:'NOAA CDO token...',
+                onInput:function(e){var v=e.target.value;setApiKeys(function(k){return Object.assign({},k,{noaa:v});});}}),
+              h('button',{className:'btn btn-p',style:{fontSize:'11px',padding:'4px 10px'},disabled:apiKeysSaving,
+                onClick:function(){saveApiKeys({noaa:apiKeys.noaa||''});}},apiKeysSaving?'Saving…':'Save'),
+              noaaData&&h('button',{className:'btn btn-sm',style:{fontSize:'11px'},onClick:refreshNoaa},'↻')),
+            noaaData&&noaaData.station&&h('div',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--green)',marginTop:'4px'}},'✓ '+noaaData.station.name+' · '+noaaData.updatedAt)),
+          h('div',null,
+            h('div',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--muted)',letterSpacing:'1px',marginBottom:'5px'}},'AISSTREAM.IO API KEY'),
+            h('div',{style:{fontSize:'11px',color:'var(--dim)',marginBottom:'6px'}},'Vessel tracking. Free key at ',h('span',{style:{fontFamily:'var(--m)',color:'var(--cyan)'}},'aisstream.io')),
+            h('div',{style:{display:'flex',gap:'6px',alignItems:'center'}},
+              h('input',{className:'inp',style:{flex:1,fontSize:'12px'},type:'text',value:apiKeys.aisstream||'',placeholder:'AISStream API key...',
+                onInput:function(e){var v=e.target.value;setApiKeys(function(k){return Object.assign({},k,{aisstream:v});});}}),
+              h('button',{className:'btn btn-p',style:{fontSize:'11px',padding:'4px 10px'},disabled:apiKeysSaving,
+                onClick:function(){saveApiKeys({aisstream:apiKeys.aisstream||''});}},apiKeysSaving?'Saving…':'Save'),
+              h('button',{className:'btn btn-sm',style:{fontSize:'11px'},disabled:aisLoading,onClick:refreshAis},aisLoading?h('span',{className:'spin'},'@'):'↻')),
+            aisData&&h('div',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--green)',marginTop:'4px'}},'✓ '+aisData.totalVessels+' vessels · '+aisData.updatedAt))))))));
   }
   // Leaflet map effect — runs when map view is active or events/filters change
   var _mapVisibleEvents = React.useMemo(function(){
@@ -3350,6 +3388,34 @@ function App() {
   }
 
   // ---- LAYOUT ----
+
+  function saveApiKeys(updates) {
+    setApiKeysSaving(true);
+    var merged = Object.assign({}, apiKeys, updates);
+    setApiKeys(merged);
+    fetch(srvUrl+'/api-keys', {method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(updates)})
+      .then(function(r){return r.json();})
+      .catch(function(e){setErr('Failed to save API keys: '+e.message);})
+      .finally(function(){setApiKeysSaving(false);});
+  }
+
+  function refreshNoaa() {
+    fetch(srvUrl+'/noaa-refresh', {method:'POST'})
+      .then(function(r){return r.json();})
+      .then(function(d){if(d&&d.indicators) setNoaaData(d);})
+      .catch(function(e){setErr('NOAA refresh failed: '+e.message);});
+  }
+
+  function refreshAis() {
+    setAisLoading(true);
+    fetch(srvUrl+'/ais-refresh', {method:'POST'})
+      .then(function(r){return r.json();})
+      .then(function(d){if(d&&d.ports) setAisData(d);})
+      .catch(function(e){setErr('AIS refresh failed: '+e.message);})
+      .finally(function(){setAisLoading(false);});
+  }
 
   function refreshFred() {
     setFredLoading(true);
