@@ -4680,58 +4680,117 @@ function App() {
     var now = new Date();
     var todayStr = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
 
-    var artCtx = filteredArts.length > 0
-      ? 'ARTICLE ARCHIVE ('+filteredArts.length+' total):\n'
-        + filteredArts.slice().sort(function(a,b){return(b.date||'').localeCompare(a.date||'');}).slice(0,50)
-            .map(function(a){return (a.date||'')+' | '+(a.title||'');}).join('\n')
-      : 'No articles in archive.';
+    // ── Article context: filter toward governance/media/rights topics ──────────
+    var RELEVANT_TOPICS = ['governance','conflict','migration','health_systems','trade','finance','tech_ai'];
+    var sorted = filteredArts.slice().sort(function(a,b){
+      return (b.date||'').localeCompare(a.date||'');
+    });
+    // Prioritise relevant topics, then fill remaining slots with everything else
+    var relevant = sorted.filter(function(a){
+      return RELEVANT_TOPICS.indexOf(a.topicId) >= 0;
+    }).slice(0, 40);
+    var filler = sorted.filter(function(a){
+      return RELEVANT_TOPICS.indexOf(a.topicId) < 0;
+    }).slice(0, 20);
+    var pool = relevant.concat(filler).slice(0, 50);
+
+    // Send title + snippet for richer signal (not just headlines)
+    var artCtx = pool.length > 0
+      ? pool.map(function(a){
+          var snip = (a.snippet||'').slice(0,120);
+          return (a.date||'')+' | '+(a.title||'')+(snip?' — '+snip:'');
+        }).join('\n')
+      : 'No articles available.';
 
     var brittIds = BRITT_14.map(function(x){return x.id;}).join(',');
     var ecoIds   = ECO_14.map(function(x){return x.id;}).join(',');
 
-    var allIndicators = BRITT_14.concat(ECO_14).map(function(x){
+    var brittList = BRITT_14.map(function(x){
       return x.id+': '+x.label+' — '+x.desc;
     }).join('\n');
 
-    var sys = 'You are an expert analyst of democratic backsliding and authoritarianism. Today: '+todayStr+'.'
-      +'\nAssess each of the 28 warning indicators against the article evidence and your knowledge.'
-      +'\nReturn ONLY valid raw JSON. No markdown. Start with { end with }.';
+    var ecoList = ECO_14.map(function(x){
+      return x.id+': '+x.label+' — '+x.desc;
+    }).join('\n');
 
-    var prompt = 'Assess ALL 28 indicators of democratic backsliding for the current period.\n\n'
-      +'INDICATORS:\n'+allIndicators+'\n\n'
-      +'ARTICLES:\n'+artCtx+'\n\n'
-      +'Return this exact JSON structure:\n'
-      +'{\n'
-      +'  "updatedAt": "'+todayStr+'",\n'
-      +'  "overallSignal": "critical|elevated|moderate|low",\n'
-      +'  "overallScore": <integer 0-100, higher=more authoritarian>,\n'
-      +'  "summary": "<3-4 sentence overall assessment>",\n'
-      +'  "britt": [\n'
-      +'    {"id":"<id>","signal":"critical|elevated|moderate|low","score":<0-100>,"blurb":"<2 sentences: current evidence and trajectory>"},\n'
-      +'    ... (all 14 Britt indicators)\n'
-      +'  ],\n'
-      +'  "eco": [\n'
-      +'    {"id":"<id>","signal":"critical|elevated|moderate|low","score":<0-100>,"blurb":"<2 sentences: current evidence and trajectory>"},\n'
-      +'    ... (all 14 Eco indicators)\n'
-      +'  ]\n'
-      +'}\n\n'
-      +'Britt ids (in order): '+brittIds+'\n'
-      +'Eco ids (in order): '+ecoIds+'\n'
-      +'score: 0=no evidence, 50=concerning, 100=fully exhibited\n'
-      +'signal: critical=actively occurring, elevated=clear warning signs, moderate=some indicators, low=minimal evidence\n'
-      +'Use specific recent events from the articles where available.';
+    // ── System prompt ──────────────────────────────────────────────────────────
+    var sys = 'You are a political scientist specializing in authoritarianism, democratic backsliding, and fascism studies. Today is '+todayStr+'.'
+      +'\n\nYour task: score each indicator based on DOCUMENTED REAL-WORLD CONDITIONS as of your knowledge cutoff, using the provided articles as supplementary evidence.'
+      +'\n\nCRITICAL SCORING RULES:'
+      +'\n- DO NOT default to "low" out of caution. Score what the evidence actually shows.'
+      +'\n- Compare current conditions to the TRAJECTORY over the past 2-4 years, not to peak historical fascism.'
+      +'\n- Score = how far this indicator has MOVED from baseline democratic norms (0=no movement, 100=fully institutionalized as a governing mechanism).'
+      +'\n- signal=low: isolated incidents only, no systemic pattern'
+      +'\n- signal=moderate: documented pattern, multiple examples, some institutional involvement'
+      +'\n- signal=elevated: systemic, accelerating, with active government or corporate support'
+      +'\n- signal=critical: operating as an active governing mechanism, not just rhetoric'
+      +'\n- A score of 40-60 is NORMAL for many of these in mature democracies under stress. Do not treat 50 as alarming — treat it as the realistic baseline.'
+      +'\nReturn ONLY valid raw JSON. No markdown, no explanation. Start with { end with }.';
 
-    callLM(sys, prompt, 9000)
+    // ── Split into TWO calls for better per-indicator attention ────────────────
+    function buildPrompt(indicators, ids, label) {
+      return 'Assess these '+ids.split(",").length+' '+label+' indicators against current real-world conditions.\n\n'
+        +'INDICATORS TO SCORE:\n'+indicators+'\n\n'
+        +'SUPPLEMENTARY ARTICLES (use alongside your own knowledge):\n'+artCtx+'\n\n'
+        +'Return a JSON array (not object) — one entry per indicator in the order listed:\n'
+        +'[\n'
+        +'  {"id":"<id>","signal":"critical|elevated|moderate|low","score":<0-100>,'
+        +'"blurb":"<2 specific sentences: name actual events, people, policies, or laws as evidence. Include trajectory direction.>"}\n'
+        +']\n\n'
+        +'IDs in order: '+ids+'\n'
+        +'SCORING REMINDER: Use the full 0-100 range. Do not cluster at 0-20. '
+        +'If there is a documented pattern of behavior (even if contested), score 40-65. '
+        +'If institutionalized with government backing, score 65-85. '
+        +'If operating as a core governing mechanism, score 85-100. '
+        +'Name specific examples in blurb — vague assessments are not useful.';
+    }
+
+    var p = {updatedAt: todayStr, britt: [], eco: [], overallScore: 0, overallSignal: 'low', summary: ''};
+
+    // Call 1: Britt's 14
+    callLM(sys, buildPrompt(brittList, brittIds, "Britt"), 6000)
       .then(function(txt){
         var clean = txt.replace(/```json|```/g,'').trim();
-        var start = clean.indexOf('{'), end = clean.lastIndexOf('}');
-        if (start<0||end<0) throw new Error('No JSON found');
-        var p = JSON.parse(clean.slice(start,end+1));
-        p.britt = p.britt||[]; p.eco = p.eco||[];
-        // Merge definitions into results for display
+        var s = clean.indexOf('['), e = clean.lastIndexOf(']');
+        if (s>=0 && e>s) {
+          try { p.britt = JSON.parse(clean.slice(s,e+1)); } catch(err) {}
+        }
+      })
+      // Call 2: Eco's 14
+      .then(function(){
+        return callLM(sys, buildPrompt(ecoList, ecoIds, "Eco"), 6000);
+      })
+      .then(function(txt){
+        var clean = txt.replace(/```json|```/g,'').trim();
+        var s = clean.indexOf('['), e = clean.lastIndexOf(']');
+        if (s>=0 && e>s) {
+          try { p.eco = JSON.parse(clean.slice(s,e+1)); } catch(err) {}
+        }
+      })
+      // Call 3: overall score + summary
+      .then(function(){
+        var allScores = p.britt.concat(p.eco).map(function(x){return x.score||0;});
+        var avg = allScores.length
+          ? Math.round(allScores.reduce(function(a,b){return a+b;},0)/allScores.length)
+          : 0;
+        p.overallScore = avg;
+        p.overallSignal = avg >= 65 ? 'critical' : avg >= 45 ? 'elevated' : avg >= 25 ? 'moderate' : 'low';
+
+        var summaryPrompt = 'Based on the following per-indicator scores for democratic backsliding, write a 3-4 sentence overall assessment. '
+          +'Be specific — name countries, leaders, policies, or trends. Note which indicators are most advanced and which are accelerating fastest. '
+          +'Do not hedge excessively.\n\n'
+          +'Britt scores: '+p.britt.map(function(x){return x.id+'='+x.score;}).join(', ')+'\n'
+          +'Eco scores: '+p.eco.map(function(x){return x.id+'='+x.score;}).join(', ')+'\n'
+          +'Overall avg: '+avg+'\n\n'
+          +'Return ONLY the summary paragraph. No JSON. No preamble.';
+
+        return callLM('You are a political analyst. Be direct and specific.', summaryPrompt, 1000);
+      })
+      .then(function(txt){
+        p.summary = txt.trim();
         setFascResult(p);
         fetch(srvUrl+'/fascism',{method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify(p)});
+          body:JSON.stringify(p)}).catch(function(){});
       })
       .catch(function(e){setErr('Backslide analysis failed: '+e.message);})
       .finally(function(){setFascRefreshing(false);});
