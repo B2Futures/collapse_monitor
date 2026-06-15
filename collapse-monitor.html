@@ -3658,17 +3658,37 @@ function App() {
 
       // ── FRED Economic Indicators ────────────────────────────────────
       h('div',{className:'card mb12'},
-        h('div',{style:{display:'flex',alignItems:'center',gap:'10px',marginBottom:'10px',flexWrap:'wrap'}},
-          h('div',{style:{fontFamily:'var(--m)',fontSize:'11px',color:'var(--cyan)',letterSpacing:'1px',fontWeight:700}},'ECONOMIC INDICATORS'),
-          h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--muted)'}},'FRED · auto-refreshed every 24h'),
-          fredData&&h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--dim)',marginLeft:'auto'}},fredData.updatedAt),
-          h('button',{className:'btn btn-sm',disabled:fredLoading,onClick:refreshFred,
-            style:{fontSize:'10px',padding:'2px 8px',marginLeft:'4px'}},
-            fredLoading?h('span',null,h('span',{className:'spin'},'@ '),'…'):'↻')),
+        // ── Header ─────────────────────────────────────────────────────
+        h('div',{style:{marginBottom:'10px'}},
+          h('div',{style:{display:'flex',alignItems:'center',gap:'10px',flexWrap:'wrap',marginBottom:'6px'}},
+            h('div',{style:{fontFamily:'var(--m)',fontSize:'11px',color:'var(--cyan)',letterSpacing:'1px',fontWeight:700}},'ECONOMIC STRESS INDICATORS'),
+            h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--muted)'}},'via FRED · cached 24h'),
+            fredData&&h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--dim)',marginLeft:'auto'}},fredData.updatedAt),
+            h('button',{className:'btn btn-sm',disabled:fredLoading,onClick:refreshFred,
+              style:{fontSize:'10px',padding:'2px 8px'}},
+              fredLoading?h('span',null,h('span',{className:'spin'},'@ '),'Loading...'):'↻ Refresh')),
+          h('div',{style:{fontSize:'11px',color:'var(--dim)',lineHeight:'1.55'}},
+            'Economic stress accelerates planetary threshold breaches — debt-driven resource extraction, '
+            +'inflation-driven energy demand, recession-driven environmental rollback. '
+            +'Each indicator shows current value, z-score vs. 2-year baseline, and 12-week trend. '
+            +h('span',{style:{color:'var(--cyan)',fontFamily:'var(--m)'}},'σ'),' > 2 signals an anomaly.')),
+
+        // ── Data ──────────────────────────────────────────────────────
         fredLoading&&!fredData
-          ? h('div',{style:{textAlign:'center',padding:'16px',color:'var(--muted)',fontFamily:'var(--m)',fontSize:'12px'}},'Fetching data from FRED...')
-          : fredData
-            ? h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:'10px'}},
+          ? h('div',{style:{display:'flex',alignItems:'center',gap:'10px',padding:'16px',
+              color:'var(--muted)',fontFamily:'var(--m)',fontSize:'12px'}},
+              h('span',{className:'spin',style:{fontSize:'18px'}},'@'),
+              h('span',null,'Fetching 8 indicators from FRED...'))
+          : !fredData
+            ? h('div',{style:{padding:'14px',background:'var(--s3)',borderRadius:'4px',
+                border:'1px solid var(--border)'}},
+                h('div',{style:{fontFamily:'var(--m)',fontSize:'11px',color:'var(--muted)',marginBottom:'6px'}},'No data loaded'),
+                h('div',{style:{fontSize:'12px',color:'var(--dim)',lineHeight:'1.5'}},
+                  'Click ↻ Refresh to pull live data from the St. Louis Federal Reserve (FRED). '
+                  +'No API key required. Requires an internet connection from the server.'),
+                h('button',{className:'btn btn-p',style:{marginTop:'10px',fontSize:'11px'},
+                  disabled:fredLoading,onClick:refreshFred},'[+] Load Economic Data'))
+            : h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:'10px'}},
                 (fredData.indicators||[]).map(function(ind){
                   var sc = SIGCOL[ind.signal]||'#546e7a';
                   var SIGCB = {critical:'rgba(255,45,74,.1)',elevated:'rgba(255,119,51,.08)',moderate:'rgba(255,208,0,.06)',low:'rgba(0,232,122,.06)'};
@@ -3694,15 +3714,13 @@ function App() {
                         ind.current!==null&&ind.current!==undefined?Number(ind.current).toLocaleString():'—'),
                       h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--dim)'}},ind.unit),
                       ind.zscore!=null&&h('span',{style:{
-                        fontFamily:'var(--m)',fontSize:'10px',marginLeft:'4px',
+                        fontFamily:'var(--m)',fontSize:'10px',marginLeft:'6px',
                         color:Math.abs(ind.zscore)>1.5?sc:'var(--dim)'}},
-                        (ind.zscore>0?'+':'')+ind.zscore+'σ')),
+                        (ind.zscore>0?'+':'')+ind.zscore+'\u03c3')),
                     sp&&h('svg',{viewBox:'0 0 76 18',style:{width:'100%',height:'20px'}},
                       h('path',{d:sp,fill:'none',stroke:sc,strokeWidth:'1.5',strokeLinecap:'round',strokeLinejoin:'round'})),
                     ind.date&&h('div',{style:{fontFamily:'var(--m)',fontSize:'9px',color:'var(--dim)',marginTop:'3px'}},'as of '+ind.date));
-                }))
-            : h('div',{style:{fontFamily:'var(--m)',fontSize:'11px',color:'var(--dim)',padding:'8px 0'}},
-                'No economic data — restart server to fetch from FRED')),
+                }))),
 
       threshRefreshing&&h('div',{className:'card',style:{textAlign:'center',padding:'30px'}},
         h('div',{className:'spin',style:{fontSize:'20px',color:'var(--cyan)',display:'block',marginBottom:'8px'}},'@'),
