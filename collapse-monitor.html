@@ -2834,15 +2834,15 @@ function App() {
           'Automatically collect new articles in the background. Server must be running. Uses your current Intake settings.'),
         h('div',{style:{display:'flex',alignItems:'center',gap:'10px',flexWrap:'wrap'}},
           h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--muted)',letterSpacing:'1px'}},'INTERVAL:'),
-          [6,12,24,48].map(function(h){
-            var active = schedInterval===h;
-            return h('button',{key:h,className:'btn btn-sm',
+          [6,12,24,48].map(function(hrs){
+            var active = schedInterval===hrs;
+            return h('button',{key:hrs,className:'btn btn-sm',
               style:{fontSize:'11px',
                 background:active?'rgba(0,180,216,.15)':'',
                 borderColor:active?'var(--cyan)':'var(--border)',
                 color:active?'var(--cyan)':'var(--muted)'},
-              onClick:function(){setSchedInterval(h);}},
-              h+'h');
+              onClick:function(){setSchedInterval(hrs);}},
+              hrs+'h');
           }),
           schedStatus&&schedStatus.running
             ? h('button',{className:'btn',style:{fontSize:'11px',color:'#ff6b7d',borderColor:'rgba(255,45,74,.4)'},
@@ -2857,29 +2857,62 @@ function App() {
           'Last auto-collect: '+schedStatus.lastRun)),
 
       h('div',{className:'card'},
-        h('div',{className:'card-h'},'External API Keys'),
-        h('div',{style:{fontSize:'12px',color:'var(--muted)',marginBottom:'12px',lineHeight:'1.6'}},'Stored locally in ',h('span',{style:{fontFamily:'var(--m)',color:'var(--cyan)'}},'data/api_keys.json'),'. Never sent anywhere except the target API.'),
-        h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'16px'}},
-          h('div',null,
-            h('div',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--muted)',letterSpacing:'1px',marginBottom:'5px'}},'NOAA NCDC TOKEN'),
-            h('div',{style:{fontSize:'11px',color:'var(--dim)',marginBottom:'6px'}},'Climate data. Free token at ',h('span',{style:{fontFamily:'var(--m)',color:'var(--cyan)'}},'ncdc.noaa.gov/cdo-web/token')),
-            h('div',{style:{display:'flex',gap:'6px',alignItems:'center'}},
-              h('input',{className:'inp',style:{flex:1,fontSize:'12px'},type:'text',value:apiKeys.noaa||'',placeholder:'NOAA CDO token...',
-                onInput:function(e){var v=e.target.value;setApiKeys(function(k){return Object.assign({},k,{noaa:v});});}}),
-              h('button',{className:'btn btn-p',style:{fontSize:'11px',padding:'4px 10px'},disabled:apiKeysSaving,
-                onClick:function(){saveApiKeys({noaa:apiKeys.noaa||''});}},apiKeysSaving?'Saving…':'Save'),
-              noaaData&&h('button',{className:'btn btn-sm',style:{fontSize:'11px'},onClick:refreshNoaa},'↻')),
-            noaaData&&noaaData.station&&h('div',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--green)',marginTop:'4px'}},'✓ '+noaaData.station.name+' · '+noaaData.updatedAt)),
-          h('div',null,
-            h('div',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--muted)',letterSpacing:'1px',marginBottom:'5px'}},'AISSTREAM.IO API KEY'),
-            h('div',{style:{fontSize:'11px',color:'var(--dim)',marginBottom:'6px'}},'Vessel tracking. Free key at ',h('span',{style:{fontFamily:'var(--m)',color:'var(--cyan)'}},'aisstream.io')),
-            h('div',{style:{display:'flex',gap:'6px',alignItems:'center'}},
-              h('input',{className:'inp',style:{flex:1,fontSize:'12px'},type:'text',value:apiKeys.aisstream||'',placeholder:'AISStream API key...',
-                onInput:function(e){var v=e.target.value;setApiKeys(function(k){return Object.assign({},k,{aisstream:v});});}}),
-              h('button',{className:'btn btn-p',style:{fontSize:'11px',padding:'4px 10px'},disabled:apiKeysSaving,
-                onClick:function(){saveApiKeys({aisstream:apiKeys.aisstream||''});}},apiKeysSaving?'Saving…':'Save'),
-              h('button',{className:'btn btn-sm',style:{fontSize:'11px'},disabled:aisLoading,onClick:refreshAis},aisLoading?h('span',{className:'spin'},'@'):'↻')),
-            aisData&&h('div',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--green)',marginTop:'4px'}},'✓ '+aisData.totalVessels+' vessels · '+aisData.updatedAt))))))));
+        h('div',{className:'card-h'},'NOAA NCDC — Climate Data'),
+        h('div',{style:{fontSize:'12px',color:'var(--muted)',marginBottom:'10px',lineHeight:'1.6'}},
+          'Real temperature & precipitation data for your local area. Free token at ',
+          h('a',{href:'https://www.ncdc.noaa.gov/cdo-web/token',target:'_blank',
+            style:{color:'var(--cyan)',fontFamily:'var(--m)'}},'ncdc.noaa.gov/cdo-web/token'),'.'),
+        h('div',{style:{display:'flex',gap:'6px',alignItems:'center',marginBottom:'8px'}},
+          h('input',{className:'inp',style:{flex:1,fontSize:'12px'},type:'text',
+            value:apiKeys.noaa||'',placeholder:'Paste NOAA CDO token...',
+            onInput:function(e){var v=e.target.value;
+              setApiKeys(function(k){return Object.assign({},k,{noaa:v});});}}),
+          h('button',{className:'btn btn-p',style:{fontSize:'11px',padding:'4px 12px'},
+            disabled:apiKeysSaving,
+            onClick:function(){saveApiKeys({noaa:apiKeys.noaa||''});}},
+            apiKeysSaving?'Saving...':'Save'),
+          noaaData&&h('button',{className:'btn btn-sm',style:{fontSize:'11px'},
+            onClick:refreshNoaa},'[R] Refresh')),
+        noaaData&&noaaData.station
+          ? h('div',{style:{fontFamily:'var(--m)',fontSize:'11px',color:'var(--green)'}},
+              '[+] '+noaaData.station.name+' ('+noaaData.station.state+') | '+noaaData.updatedAt)
+          : h('div',{style:{fontFamily:'var(--m)',fontSize:'11px',color:'var(--dim)'}},
+              apiKeys.noaa ? 'Key saved. Data loads on next refresh.' : 'No key set.')),
+
+      h('div',{className:'card'},
+        h('div',{className:'card-h'},'AISStream.io — Vessel Tracking'),
+        h('div',{style:{fontSize:'12px',color:'var(--muted)',marginBottom:'10px',lineHeight:'1.6'}},
+          'Live vessel positions near 8 major global ports — shipping congestion proxy. Free key at ',
+          h('a',{href:'https://aisstream.io',target:'_blank',
+            style:{color:'var(--cyan)',fontFamily:'var(--m)'}},'aisstream.io'),'.'),
+        h('div',{style:{display:'flex',gap:'6px',alignItems:'center',marginBottom:'8px'}},
+          h('input',{className:'inp',style:{flex:1,fontSize:'12px'},type:'text',
+            value:apiKeys.aisstream||'',placeholder:'Paste AISStream API key...',
+            onInput:function(e){var v=e.target.value;
+              setApiKeys(function(k){return Object.assign({},k,{aisstream:v});});}}),
+          h('button',{className:'btn btn-p',style:{fontSize:'11px',padding:'4px 12px'},
+            disabled:apiKeysSaving,
+            onClick:function(){saveApiKeys({aisstream:apiKeys.aisstream||''});}},
+            apiKeysSaving?'Saving...':'Save'),
+          h('button',{className:'btn btn-sm',style:{fontSize:'11px'},
+            disabled:aisLoading,onClick:refreshAis},
+            aisLoading?h('span',{className:'spin'},'@ '):'[>] Snapshot')),
+        aisData
+          ? h('div',null,
+              h('div',{style:{fontFamily:'var(--m)',fontSize:'11px',color:'var(--green)',marginBottom:'6px'}},
+                '[+] '+aisData.totalVessels+' vessels sampled | '+aisData.updatedAt),
+              h('div',{style:{display:'flex',gap:'6px',flexWrap:'wrap'}},
+                (aisData.ports||[]).map(function(p){
+                  var pc=SIGCOL[p.signal]||'#546e7a';
+                  return h('span',{key:p.name,style:{fontFamily:'var(--m)',fontSize:'10px',
+                    padding:'2px 8px',borderRadius:'2px',
+                    background:pc+'15',border:'1px solid '+pc+'40',color:pc}},
+                    p.name+': '+p.vessels);
+                })))
+          : h('div',{style:{fontFamily:'var(--m)',fontSize:'11px',color:'var(--dim)'}},
+              apiKeys.aisstream
+                ? 'Key saved. Click [>] Snapshot to sample vessel data.'
+                : 'No key set.'))))));
   }
   // Leaflet map effect — runs when map view is active or events/filters change
   var _mapVisibleEvents = React.useMemo(function(){
@@ -4788,43 +4821,106 @@ function App() {
                 h('div',{style:{fontSize:'11px',color:'var(--muted)',lineHeight:'1.5'}},s.detail));
             })),
 
-          // RIGHT: strengths, stressors, watch, weather, drill
+          // RIGHT: scale-specific columns
           h('div',null,
-            resResult.localWeather&&h('div',{className:'card mb12'},
-              h('div',{className:'card-h',style:{color:'#00b4d8'}},'Local Weather & Climate'),
-              (resResult.localWeather.recentExtremes||[]).length>0&&h('div',{style:{marginBottom:'8px'}},
-                (resResult.localWeather.recentExtremes||[]).map(function(e,i){
-                  return h('div',{key:i,style:{fontSize:'12px',color:'#ff8a8a',marginBottom:'3px',
-                    padding:'4px 8px',background:'rgba(255,45,74,.06)',borderRadius:'3px'}},'⚠ '+e);
-                })),
-              resResult.localWeather.climateRisk&&h('div',{style:{fontSize:'12px',color:'var(--text)',marginBottom:'6px',lineHeight:'1.5'}},resResult.localWeather.climateRisk),
-              resResult.localWeather.infrastructureImpact&&h('div',{style:{fontSize:'12px',color:'var(--muted)',lineHeight:'1.5'}},resResult.localWeather.infrastructureImpact)),
-            (resResult.strengths||[]).length>0&&h('div',{className:'card mb12'},
-              h('div',{className:'card-h',style:{color:'var(--green)'}},'Strengths'),
-              h('ul',{className:'bullets'},
-                (resResult.strengths||[]).map(function(s,i){return h('li',{key:i,style:{color:'var(--green)',marginBottom:'4px'}},s);}))),
-            (resResult.stressors||[]).length>0&&h('div',{className:'card mb12'},
-              h('div',{className:'card-h',style:{color:'#ff6b7d'}},'Key Stressors'),
-              h('div',{style:{fontSize:'11px',color:'var(--dim)',fontFamily:'var(--m)',marginBottom:'8px'}},'Click any item to find supporting articles'),
-              h('div',null,(resResult.stressors||[]).map(function(r,i){
-                var active=drillQuery===r;
-                return h('div',{key:i,style:{
+
+            resScale==='world'&&h('div',null,
+              (resResult.strengths||[]).length>0&&h('div',{className:'card mb12'},
+                h('div',{className:'card-h',style:{color:'var(--green)'}},'Strengths'),
+                h('ul',{className:'bullets'},
+                  (resResult.strengths||[]).map(function(s,i){return h('li',{key:i,style:{color:'var(--green)',marginBottom:'4px'}},s);}))),
+              (resResult.stressors||[]).length>0&&h('div',{className:'card mb12'},
+                h('div',{className:'card-h',style:{color:'#ff6b7d'}},'Key Stressors'),
+                h('div',{style:{fontSize:'11px',color:'var(--dim)',fontFamily:'var(--m)',marginBottom:'8px'}},'Click to drill articles'),
+                h('div',null,(resResult.stressors||[]).map(function(r,i){
+                  var active=drillQuery===r;
+                  return h('div',{key:i,onClick:function(){openDrill(r);},style:{
                     padding:'7px 10px',marginBottom:'5px',borderRadius:'3px',cursor:'pointer',
                     background:active?'rgba(255,45,74,.08)':'var(--s3)',
                     border:'1px solid '+(active?'rgba(255,45,74,.4)':'var(--border)'),
-                    fontSize:'12px',color:active?'#ff6b7d':'#ff8a8a',lineHeight:'1.5'},
-                  onClick:function(){openDrill(r);}},
-                  h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:active?'#ff6b7d':'var(--dim)',marginRight:'6px'}},'[!]'),r);
-              }))),
-            (resResult.watchItems||[]).length>0&&h('div',{className:'card mb12'},
-              h('div',{className:'card-h',style:{color:'#ffd000'}},'Watch Items — Next 30-90 Days'),
-              h('div',null,(resResult.watchItems||[]).map(function(r,i){
-                return h('div',{key:i,style:{padding:'6px 10px',marginBottom:'4px',borderRadius:'3px',
+                    fontSize:'12px',color:active?'#ff6b7d':'#ff8a8a',lineHeight:'1.5'}},
+                    h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--dim)',marginRight:'6px'}},'[!]'),r);
+                }))),
+              (resResult.stabilizingFactors||[]).length>0&&h('div',{className:'card mb12'},
+                h('div',{className:'card-h',style:{color:'#00b4d8'}},'Stabilizing Factors'),
+                h('ul',{className:'bullets'},
+                  (resResult.stabilizingFactors||[]).map(function(s,i){return h('li',{key:i,style:{color:'#00b4d8',marginBottom:'4px'}},s);}))),
+              (resResult.watchItems||[]).length>0&&h('div',{className:'card mb12'},
+                h('div',{className:'card-h',style:{color:'#ffd000'}},'Watch Items — Next 30-90 Days'),
+                h('div',null,(resResult.watchItems||[]).map(function(r,i){
+                  return h('div',{key:i,style:{padding:'6px 10px',marginBottom:'4px',borderRadius:'3px',
                     background:'var(--s3)',border:'1px solid var(--border)',
                     fontSize:'12px',color:'#ffe066',lineHeight:'1.5'}},
-                  h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--dim)',marginRight:'6px'}},'[~]'),r);
-              }))),
-            renderDrillPanel()))));
+                    h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--dim)',marginRight:'6px'}},'[~]'),r);
+                }))),
+              renderDrillPanel()),
+
+            resScale==='national'&&h('div',null,
+              (resResult.uniqueRiskFactors||[]).length>0&&h('div',{className:'card mb12'},
+                h('div',{className:'card-h',style:{color:'#ff6b7d'}},'Unique Risk Factors'),
+                h('div',{style:{fontSize:'11px',color:'var(--dim)',fontFamily:'var(--m)',marginBottom:'8px'}},'Click to drill articles'),
+                h('div',null,(resResult.uniqueRiskFactors||[]).map(function(r,i){
+                  var active=drillQuery===r;
+                  return h('div',{key:i,onClick:function(){openDrill(r);},style:{
+                    padding:'7px 10px',marginBottom:'5px',borderRadius:'3px',cursor:'pointer',
+                    background:active?'rgba(255,45,74,.08)':'var(--s3)',
+                    border:'1px solid '+(active?'rgba(255,45,74,.4)':'var(--border)'),
+                    fontSize:'12px',color:active?'#ff6b7d':'#ff8a8a',lineHeight:'1.5'}},
+                    h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--dim)',marginRight:'6px'}},'[!]'),r);
+                }))),
+              (resResult.stabilizingFactors||[]).length>0&&h('div',{className:'card mb12'},
+                h('div',{className:'card-h',style:{color:'#00b4d8'}},'Stabilizing Factors'),
+                h('ul',{className:'bullets'},
+                  (resResult.stabilizingFactors||[]).map(function(s,i){return h('li',{key:i,style:{color:'#00b4d8',marginBottom:'4px'}},s);}))),
+              (resResult.watchItems||[]).length>0&&h('div',{className:'card mb12'},
+                h('div',{className:'card-h',style:{color:'#ffd000'}},'Watch Items — Next 30-90 Days'),
+                h('div',null,(resResult.watchItems||[]).map(function(r,i){
+                  return h('div',{key:i,style:{padding:'6px 10px',marginBottom:'4px',borderRadius:'3px',
+                    background:'var(--s3)',border:'1px solid var(--border)',
+                    fontSize:'12px',color:'#ffe066',lineHeight:'1.5'}},
+                    h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--dim)',marginRight:'6px'}},'[~]'),r);
+                }))),
+              renderDrillPanel()),
+
+            resScale==='local'&&h('div',null,
+              resResult.localWeather&&h('div',{className:'card mb12'},
+                h('div',{className:'card-h',style:{color:'#00b4d8'}},'Local Weather & Climate'),
+                (resResult.localWeather.recentExtremes||[]).length>0&&h('div',{style:{marginBottom:'8px'}},
+                  (resResult.localWeather.recentExtremes||[]).map(function(e,i){
+                    return h('div',{key:i,style:{fontSize:'12px',color:'#ff8a8a',marginBottom:'3px',
+                      padding:'4px 8px',background:'rgba(255,45,74,.06)',borderRadius:'3px'}},'[!] '+e);
+                  })),
+                resResult.localWeather.climateRisk&&h('div',{style:{fontSize:'12px',color:'var(--text)',marginBottom:'6px',lineHeight:'1.5'}},resResult.localWeather.climateRisk),
+                resResult.localWeather.infrastructureImpact&&h('div',{style:{fontSize:'12px',color:'var(--muted)',lineHeight:'1.5'}},resResult.localWeather.infrastructureImpact)),
+              (resResult.communityImpacts||[]).length>0&&h('div',{className:'card mb12'},
+                h('div',{className:'card-h',style:{color:'#9b5de5'}},'Community Impacts'),
+                h('ul',{className:'bullets'},
+                  (resResult.communityImpacts||[]).map(function(s,i){return h('li',{key:i,style:{color:'#9b5de5',marginBottom:'4px'}},s);}))),
+              (resResult.riskFactors||[]).length>0&&h('div',{className:'card mb12'},
+                h('div',{className:'card-h',style:{color:'#ff6b7d'}},'Local Risk Factors'),
+                h('div',{style:{fontSize:'11px',color:'var(--dim)',fontFamily:'var(--m)',marginBottom:'8px'}},'Click to drill articles'),
+                h('div',null,(resResult.riskFactors||[]).map(function(r,i){
+                  var active=drillQuery===r;
+                  return h('div',{key:i,onClick:function(){openDrill(r);},style:{
+                    padding:'7px 10px',marginBottom:'5px',borderRadius:'3px',cursor:'pointer',
+                    background:active?'rgba(255,45,74,.08)':'var(--s3)',
+                    border:'1px solid '+(active?'rgba(255,45,74,.4)':'var(--border)'),
+                    fontSize:'12px',color:active?'#ff6b7d':'#ff8a8a',lineHeight:'1.5'}},
+                    h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--dim)',marginRight:'6px'}},'[!]'),r);
+                }))),
+              (resResult.stabilizingFactors||[]).length>0&&h('div',{className:'card mb12'},
+                h('div',{className:'card-h',style:{color:'#00b4d8'}},'Stabilizing Factors'),
+                h('ul',{className:'bullets'},
+                  (resResult.stabilizingFactors||[]).map(function(s,i){return h('li',{key:i,style:{color:'#00b4d8',marginBottom:'4px'}},s);}))),
+              (resResult.watchItems||[]).length>0&&h('div',{className:'card mb12'},
+                h('div',{className:'card-h',style:{color:'#ffd000'}},'Watch Items — Next 30 Days'),
+                h('div',null,(resResult.watchItems||[]).map(function(r,i){
+                  return h('div',{key:i,style:{padding:'6px 10px',marginBottom:'4px',borderRadius:'3px',
+                    background:'var(--s3)',border:'1px solid var(--border)',
+                    fontSize:'12px',color:'#ffe066',lineHeight:'1.5'}},
+                    h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--dim)',marginRight:'6px'}},'[~]'),r);
+                }))),
+              renderDrillPanel())))));
   }
 
 
