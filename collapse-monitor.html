@@ -1603,6 +1603,13 @@ function App() {
   var _mapDateFrom     = useState('');       var mapDateFrom = _mapDateFrom[0],       setMapDateFrom     = _mapDateFrom[1];
   var _mapDateTo       = useState('');       var mapDateTo = _mapDateTo[0],           setMapDateTo       = _mapDateTo[1];
   var _mapSelected     = useState(null);     var mapSelected = _mapSelected[0],       setMapSelected     = _mapSelected[1];
+  // Velocity / anomaly detection
+  var _velocity      = useState(null);     var velocity = _velocity[0],         setVelocity      = _velocity[1];
+  // Analysis history
+  var _analysisHist  = useState({});       var analysisHist = _analysisHist[0],  setAnalysisHist  = _analysisHist[1];
+  // Scheduler
+  var _schedStatus   = useState(null);     var schedStatus = _schedStatus[0],    setSchedStatus   = _schedStatus[1];
+  var _schedInterval = useState(24);       var schedInterval = _schedInterval[0],setSchedInterval = _schedInterval[1];
   var _mapRef = React.useRef(null);
   var _fascResult    = useState(null);     var fascResult = _fascResult[0],    setFascResult    = _fascResult[1];
   var _fascRefreshing= useState(false);    var fascRefreshing = _fascRefreshing[0], setFascRefreshing = _fascRefreshing[1];
@@ -1723,6 +1730,13 @@ function App() {
   function loadSrv() {
     fetchModels();
     // Load FRED economic data (cached 24h)
+    // Load velocity/anomaly data
+    fetch(srvUrl+'/velocity').then(function(r){return r.json();})
+      .then(function(d){if(d&&d.topics) setVelocity(d);}).catch(function(){});
+    // Load scheduler status
+    fetch(srvUrl+'/scheduler').then(function(r){return r.json();})
+      .then(function(d){setSchedStatus(d);
+        if(d.interval) setSchedInterval(d.interval);}).catch(function(){});
     // Load API keys
     fetch(srvUrl+'/api-keys').then(function(r){return r.json();})
       .then(function(d){setApiKeys(d||{});}).catch(function(){});
@@ -2130,7 +2144,7 @@ function App() {
       +'leadingIndicators and emergingThreats: Be specific — name regions, quantities, trends, not vague generalities.\n'
       +'Include ALL 15 topics: climate,disease,manufacturing,trade,food,energy,finance,infrastructure,governance,water,migration,conflict,health_systems,tech_ai,agriculture.';
     callLM(sys,prompt,8000)
-      .then(function(txt){var p=parseJson(txt); if(p){setTrend(p); saveSrv(arts,{trend:p});} else setErr('Could not parse JSON. Try again.');})
+      .then(function(txt){var p=parseJson(txt); if(p){setTrend(p); saveSrv(arts,{trend:p}); saveToHistory('patterns',{overallScore:p.overallScore||0,overallSignal:p.overallSignal,updatedAt:p.updatedAt||''});} else setErr('Could not parse JSON. Try again.');})
       .catch(function(e){setErr('LM Studio error: '+e.message);})
       .finally(function(){setAnalyzing(false);});
   }
@@ -2451,6 +2465,47 @@ function App() {
           h('div',{className:'ssub'},'planetary boundaries'))),
 
       // ── Row 2: National | Local columns ──────────────────────────────────
+      // ── Convergence alert ──────────────────────────────────────────────
+      velocity&&velocity.convergence&&h('div',{className:'card mb12',style:{
+        background:velocity.convergence.signal==='critical'?'rgba(255,45,74,.08)'
+          :velocity.convergence.signal==='elevated'?'rgba(255,119,51,.06)':'rgba(255,208,0,.05)',
+        border:'1px solid '+(velocity.convergence.signal==='critical'?'rgba(255,45,74,.4)'
+          :velocity.convergence.signal==='elevated'?'rgba(255,119,51,.3)':'rgba(255,208,0,.3)')}},
+        h('div',{style:{display:'flex',alignItems:'center',gap:'10px',flexWrap:'wrap'}},
+          h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',letterSpacing:'1px',
+            color:velocity.convergence.signal==='critical'?'#ff2d4a'
+              :velocity.convergence.signal==='elevated'?'#ff7733':'#ffd000'}},
+            '[!] CONVERGENCE ALERT: '+velocity.convergence.topicCount+' topics spiking simultaneously'),
+          h('span',{style:{fontSize:'12px',color:'var(--text)',flex:1}},velocity.convergence.description),
+          h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--dim)'}},velocity.updatedAt))),
+
+      // ── Article velocity sparklines ───────────────────────────────────
+      velocity&&velocity.topics&&velocity.topics.some(function(t){return t.signal!=='low';})&&
+      h('div',{className:'card mb12'},
+        h('div',{style:{display:'flex',alignItems:'center',gap:'8px',marginBottom:'10px'}},
+          h('div',{style:{fontFamily:'var(--m)',fontSize:'11px',color:'var(--cyan)',letterSpacing:'1px'}},'ARTICLE VELOCITY'),
+          h('span',{style:{fontSize:'11px',color:'var(--muted)'}},'topics with above-baseline coverage this week'),
+          h('button',{className:'btn btn-sm',style:{marginLeft:'auto',fontSize:'10px'},onClick:refreshVelocity},'\u21bb Refresh')),
+        h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(150px,1fr))',gap:'8px'}},
+          velocity.topics.filter(function(t){return t.signal!=='low';}).slice(0,8).map(function(t){
+            var tp=TOPICS.find(function(x){return x.id===t.topicId;});
+            var sc=SIGCOL[t.signal]||'#546e7a';
+            var vals=t.series||[]; var mx=Math.max.apply(null,vals)||1;
+            var sp=vals.length>1?vals.map(function(v,i){
+              var x=Math.round((i/(vals.length-1))*60),y=Math.round(16-((v/mx)*14));
+              return (i===0?'M':'L')+x+','+y;
+            }).join(' '):'';
+            return h('div',{key:t.topicId,style:{padding:'8px 10px',borderRadius:'3px',
+              background:'var(--s2)',border:'1px solid '+sc+'40'}},
+              h('div',{style:{display:'flex',justifyContent:'space-between',marginBottom:'4px'}},
+                h('div',{style:{fontSize:'11px',color:'var(--text)',fontWeight:600}},tp?tp.label.split(' ')[0]:t.topicId),
+                h('span',{style:{fontFamily:'var(--m)',fontSize:'9px',color:sc}},(t.zscore>0?'+':'')+t.zscore+'\u03c3')),
+              sp&&h('svg',{viewBox:'0 0 60 16',style:{width:'100%',height:'18px'}},
+                h('path',{d:sp,fill:'none',stroke:sc,strokeWidth:'1.5',strokeLinecap:'round',strokeLinejoin:'round'})),
+              h('div',{style:{fontFamily:'var(--m)',fontSize:'9px',color:'var(--dim)',marginTop:'2px'}},
+                t.current+' this wk vs '+t.baseline+' avg'));
+          }))),
+
       h('div',{className:'g2'},
 
         // ── LEFT: National ──────────────────────────────────────────────────
@@ -2774,6 +2829,34 @@ function App() {
               })),
             h('button',{className:'btn btn-sm',onClick:addKw},'[+]')),
       h('div',{className:'card'},
+        h('div',{className:'card-h'},'Auto-Collection Scheduler'),
+        h('div',{style:{fontSize:'12px',color:'var(--muted)',marginBottom:'12px',lineHeight:'1.6'}},
+          'Automatically collect new articles in the background. Server must be running. Uses your current Intake settings.'),
+        h('div',{style:{display:'flex',alignItems:'center',gap:'10px',flexWrap:'wrap'}},
+          h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--muted)',letterSpacing:'1px'}},'INTERVAL:'),
+          [6,12,24,48].map(function(h){
+            var active = schedInterval===h;
+            return h('button',{key:h,className:'btn btn-sm',
+              style:{fontSize:'11px',
+                background:active?'rgba(0,180,216,.15)':'',
+                borderColor:active?'var(--cyan)':'var(--border)',
+                color:active?'var(--cyan)':'var(--muted)'},
+              onClick:function(){setSchedInterval(h);}},
+              h+'h');
+          }),
+          schedStatus&&schedStatus.running
+            ? h('button',{className:'btn',style:{fontSize:'11px',color:'#ff6b7d',borderColor:'rgba(255,45,74,.4)'},
+                onClick:stopScheduler},'[x] Stop')
+            : h('button',{className:'btn btn-p',style:{fontSize:'11px'},
+                onClick:startScheduler},'[>] Start'),
+          schedStatus&&schedStatus.running&&h('span',{style:{fontFamily:'var(--m)',fontSize:'11px',color:'var(--green)'}},
+            '\u25cf Running'),
+          schedStatus&&schedStatus.nextRun&&h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--dim)'}},
+            'next: '+schedStatus.nextRun)),
+        schedStatus&&schedStatus.lastRun&&h('div',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--dim)',marginTop:'6px'}},
+          'Last auto-collect: '+schedStatus.lastRun)),
+
+      h('div',{className:'card'},
         h('div',{className:'card-h'},'External API Keys'),
         h('div',{style:{fontSize:'12px',color:'var(--muted)',marginBottom:'12px',lineHeight:'1.6'}},'Stored locally in ',h('span',{style:{fontFamily:'var(--m)',color:'var(--cyan)'}},'data/api_keys.json'),'. Never sent anywhere except the target API.'),
         h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'16px'}},
@@ -3044,6 +3127,26 @@ function App() {
           borderRadius:'2px',background:'rgba(255,208,0,.08)',border:'1px solid rgba(255,208,0,.3)',
           color:'#ffd000'}},
           '[!] Filter active — re-run analysis to apply'),
+        analysisHist.patterns&&analysisHist.patterns.length>1&&(function(){
+          var hist=analysisHist.patterns.slice(-10);
+          var scores=hist.map(function(e){return e.overallScore||0;});
+          var last=hist[hist.length-1]; var prev=hist[hist.length-2];
+          var delta=last&&prev?((last.overallScore||0)-(prev.overallScore||0)):0;
+          var sc=SIGCOL[last&&last.overallSignal]||'#546e7a';
+          var sp=scores.map(function(v,i){
+            var x=Math.round((i/(scores.length-1))*80),y=Math.round(18-((v/100)*16));
+            return (i===0?'M':'L')+x+','+y;}).join(' ');
+          return h('div',{style:{display:'flex',alignItems:'center',gap:'8px',
+            padding:'4px 10px',background:'var(--s2)',borderRadius:'3px',border:'1px solid var(--border)'}},
+            h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--muted)',letterSpacing:'1px'}},'TREND'),
+            h('svg',{viewBox:'0 0 80 18',style:{width:'80px',height:'18px',flexShrink:0}},
+              h('path',{d:sp,fill:'none',stroke:sc,strokeWidth:'1.5',strokeLinecap:'round'})),
+            h('span',{style:{fontFamily:'var(--m)',fontSize:'11px',
+              color:delta>0?'#ff6b7d':delta<0?'var(--green)':'var(--muted)'}},
+              (delta>0?'\u2191+':delta<0?'\u2193':'')+Math.abs(delta)),
+            h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--dim)'}},
+              hist.length+' runs'));
+        })(),
         h('span',{style:{fontSize:'12px',color:'var(--muted)'}},arts.length>0?'Based on '+filteredArts.length+' collected articles':'Will analyze from model knowledge')),
       err&&h('div',{className:'alert alert-err'},err),
       analyzing&&h('div',{className:'card',style:{textAlign:'center',padding:'40px'}},
@@ -3401,6 +3504,38 @@ function App() {
       .finally(function(){setApiKeysSaving(false);});
   }
 
+  function saveToHistory(kind, entry) {
+    fetch(srvUrl+'/history/append', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({kind:kind, entry:entry})
+    }).then(function(r){return r.json();})
+      .then(function(d){
+        if(d.ok) {
+          fetch(srvUrl+'/history/'+kind).then(function(r){return r.json();})
+            .then(function(hist){setAnalysisHist(function(h){var n=Object.assign({},h);n[kind]=hist;return n;})});
+        }
+      }).catch(function(){});
+  }
+
+  function startScheduler() {
+    fetch(srvUrl+'/scheduler/start', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({intervalHours:schedInterval})
+    }).then(function(r){return r.json();})
+      .then(function(d){if(d.ok) setSchedStatus({running:true,interval:schedInterval,nextRun:null});});
+  }
+
+  function stopScheduler() {
+    fetch(srvUrl+'/scheduler/stop', {method:'POST'})
+      .then(function(r){return r.json();})
+      .then(function(){setSchedStatus({running:false,interval:0});});
+  }
+
+  function refreshVelocity() {
+    fetch(srvUrl+'/velocity').then(function(r){return r.json();})
+      .then(function(d){if(d&&d.topics) setVelocity(d);});
+  }
+
   function refreshNoaa() {
     fetch(srvUrl+'/noaa-refresh', {method:'POST'})
       .then(function(r){return r.json();})
@@ -3455,7 +3590,7 @@ function App() {
         .then(function(txt){
           var p=parseJson(txt);
           if(!p||!p.assessments){setErr('Could not parse threshold JSON. Try again.');return;}
-          setThresholds(p);
+          setThresholds(p); saveToHistory('thresholds',{overall:p.overallSignal,updatedAt:p.updatedAt||''});
           fetch(srvUrl+'/thresholds',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});
         })
         .catch(function(e){setErr('LM error: '+e.message);})
@@ -3933,8 +4068,29 @@ function App() {
         h('div',{className:'sb-logo-s'},'Systemic Risk Tracker v0.6')),
       h('nav',{className:'sb-nav'},
         NAV.map(function(n){
-          return h('div',{key:n.id,className:'sb-ni '+(view===n.id?'active':''),onClick:function(){setView(n.id);}},
-            h('span',{style:{fontFamily:'var(--m)',fontSize:'11px',opacity:.7,minWidth:'20px'}},n.ic),n.label);
+          // Alert badge: check velocity for monitor, backslide signal for backslide tab
+          var badge = null;
+          if (n.id==='monitor' && velocity && velocity.convergence) {
+            var bc = {critical:'#ff2d4a',elevated:'#ff7733',moderate:'#ffd000'};
+            var bs = velocity.convergence.signal;
+            if (bs && bs!=='low') badge = h('span',{style:{marginLeft:'auto',width:'7px',height:'7px',
+              borderRadius:'50%',background:bc[bs]||'#ffd000',flexShrink:0}});
+          }
+          if (n.id==='backslide' && fascResult && fascResult.overallSignal==='critical') {
+            badge = h('span',{style:{marginLeft:'auto',width:'7px',height:'7px',
+              borderRadius:'50%',background:'#ff2d4a',flexShrink:0}});
+          }
+          if (n.id==='thresholds' && velocity && velocity.topics &&
+              velocity.topics.some(function(t){return t.signal==='critical';})) {
+            badge = h('span',{style:{marginLeft:'auto',width:'7px',height:'7px',
+              borderRadius:'50%',background:'#ff7733',flexShrink:0}});
+          }
+          return h('div',{key:n.id,
+            className:'sb-ni '+(view===n.id?'active':''),
+            style:{display:'flex',alignItems:'center'},
+            onClick:function(){setView(n.id);}},
+            h('span',{style:{fontFamily:'var(--m)',fontSize:'11px',opacity:.7,minWidth:'20px'}},n.ic),
+            n.label,badge);
         })),
       h('div',{className:'sb-foot'},
         h('div',{style:{marginBottom:'8px'}},
@@ -4545,6 +4701,7 @@ function App() {
         setResResult(p);
         fetch(srvUrl+'/resilience',{method:'POST',headers:{'Content-Type':'application/json'},
           body:JSON.stringify(p)});
+        saveToHistory('resilience', {score:p.overallScore, signal:p.overallSignal, scale:resScale, updatedAt:p.updatedAt});
       })
       .catch(function(e){setErr('Resilience analysis failed: '+e.message);})
       .finally(function(){setResRefreshing(false);});
@@ -4791,6 +4948,7 @@ function App() {
         setFascResult(p);
         fetch(srvUrl+'/fascism',{method:'POST',headers:{'Content-Type':'application/json'},
           body:JSON.stringify(p)}).catch(function(){});
+        saveToHistory('backslide', {score:p.overallScore, signal:p.overallSignal, updatedAt:p.updatedAt});
       })
       .catch(function(e){setErr('Backslide analysis failed: '+e.message);})
       .finally(function(){setFascRefreshing(false);});

@@ -4,12 +4,30 @@
 
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
-import json, os, re, time, urllib.request, urllib.parse, urllib.error, csv, io, statistics
+import json, os, re, time, urllib.request, urllib.parse, urllib.error, csv, io, statistics, threading, difflib
 from datetime import datetime, timezone
 from ddgs import DDGS
 
 app   = Flask(__name__)
 CORS(app)
+
+# Restore scheduler on startup if previously configured
+def _restore_scheduler():
+    try:
+        saved = load_settings()
+        interval = saved.get("schedulerInterval")
+        if interval and float(interval) >= 1:
+            import urllib.request as _ur
+            import threading as _th, time as _t
+            _t.sleep(2)  # wait for server to start
+            req = _ur.Request("http://localhost:5000/scheduler/start",
+                data=__import__("json").dumps({"intervalHours": interval}).encode(),
+                headers={"Content-Type": "application/json"}, method="POST")
+            try: _ur.urlopen(req, timeout=5)
+            except Exception: pass
+    except Exception: pass
+_rt = __import__("threading").Thread(target=_restore_scheduler, daemon=True)
+_rt.start()
 
 BASE_DIR  = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR  = os.path.join(BASE_DIR, "data")
@@ -25,6 +43,9 @@ RESILIENCE_FILE     = os.path.join(DATA_DIR, "resilience.json")
 FASCISM_FILE        = os.path.join(DATA_DIR, "fascism.json")
 EVENTS_FILE         = os.path.join(DATA_DIR, "events.json")
 FRED_FILE           = os.path.join(DATA_DIR, "fred_cache.json")
+HISTORY_FILE        = os.path.join(DATA_DIR, "analysis_history.json")
+VELOCITY_FILE       = os.path.join(DATA_DIR, "velocity_cache.json")
+CONVERGENCE_FILE    = os.path.join(DATA_DIR, "convergence_cache.json")
 NOAA_FILE           = os.path.join(DATA_DIR, "noaa_cache.json")
 AIS_FILE            = os.path.join(DATA_DIR, "ais_cache.json")
 API_KEYS_FILE       = os.path.join(DATA_DIR, "api_keys.json")
@@ -951,6 +972,266 @@ def fred_refresh():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
+# ── ARTICLE VELOCITY & ANOMALY DETECTION ─────────────────────────────────────
+
+@app.route("/velocity", methods=["GET"])
+def velocity():
+    """
+    Compute rolling z-scores for article counts per topic.
+    Detects when a topic's coverage is spiking above its recent baseline.
+    Returns per-topic velocity scores and an overall convergence signal.
+    """
+    try:
+        # Check cache (refresh every 2 hours)
+        if os.path.exists(VELOCITY_FILE):
+            with open(VELOCITY_FILE, "r", encoding="utf-8") as f:
+                cached = json.load(f)
+            if time.time() - cached.get("computedAt", 0) < 7200:
+                return jsonify(cached)
+
+        articles = load_articles()
+        if not articles:
+            return jsonify({"topics": [], "convergence": None, "computedAt": time.time()})
+
+        # Group articles by topic and week
+        from collections import defaultdict
+        from datetime import timedelta
+
+        now = datetime.now(timezone.utc)
+        topic_weeks = defaultdict(lambda: defaultdict(int))
+
+        for a in articles:
+            raw = (a.get("date") or "")[:10]
+            try:
+                dt = datetime.strptime(raw, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            except Exception:
+                continue
+            age_days = (now - dt).days
+            if age_days > 365:
+                continue
+            week = age_days // 7  # 0 = this week, 1 = last week, etc.
+            tid = a.get("topicId", "unknown")
+            topic_weeks[tid][week] += 1
+
+        results = []
+        anomalous_topics = []
+
+        for tid, weeks in topic_weeks.items():
+            # Build 12-week series (most recent first = week 0)
+            series = [weeks.get(w, 0) for w in range(12)]
+            current = series[0]          # this week
+            baseline = series[1:]        # previous 11 weeks
+
+            if len(baseline) < 3:
+                continue
+
+            mu = statistics.mean(baseline)
+            try:
+                sd = statistics.stdev(baseline)
+            except Exception:
+                sd = 0
+
+            z = (current - mu) / sd if sd > 0 else 0.0
+            signal = ("critical" if z > 3.0 else
+                      "elevated" if z > 2.0 else
+                      "moderate" if z > 1.0 else "low")
+
+            entry = {
+                "topicId":  tid,
+                "current":  current,
+                "baseline": round(mu, 1),
+                "zscore":   round(z, 2),
+                "signal":   signal,
+                "series":   list(reversed(series)),  # chronological order for chart
+                "trend":    "accelerating" if z > 1.5 else "stable" if abs(z) < 0.5 else "declining"
+            }
+            results.append(entry)
+            if signal in ("critical", "elevated"):
+                anomalous_topics.append(tid)
+
+        results.sort(key=lambda x: -abs(x["zscore"]))
+
+        # Cross-domain convergence: multiple topics spiking simultaneously
+        convergence = None
+        if len(anomalous_topics) >= 3:
+            convergence = {
+                "signal":     "critical" if len(anomalous_topics) >= 5 else "elevated",
+                "topicCount": len(anomalous_topics),
+                "topics":     anomalous_topics,
+                "description": f"{len(anomalous_topics)} topics showing simultaneous coverage spikes — potential cross-domain convergence event."
+            }
+        elif len(anomalous_topics) == 2:
+            convergence = {
+                "signal":     "moderate",
+                "topicCount": 2,
+                "topics":     anomalous_topics,
+                "description": f"2 topics ({', '.join(anomalous_topics)}) showing concurrent spikes."
+            }
+
+        payload = {
+            "topics":      results,
+            "convergence": convergence,
+            "totalArticles": len(articles),
+            "computedAt":  time.time(),
+            "updatedAt":   now.strftime("%Y-%m-%d %H:%M UTC")
+        }
+
+        with open(VELOCITY_FILE, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2)
+        return jsonify(payload)
+
+    except Exception as e:
+        return jsonify({"error": str(e), "topics": [], "convergence": None}), 500
+
+
+# ── ANALYSIS HISTORY ──────────────────────────────────────────────────────────
+
+def load_history():
+    try:
+        if os.path.exists(HISTORY_FILE):
+            with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {"patterns": [], "thresholds": [], "resilience": [], "backslide": []}
+
+
+def save_history(history):
+    with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+        json.dump(history, f, indent=2)
+
+
+@app.route("/history/append", methods=["POST"])
+def history_append():
+    """Append a new analysis result to the history log (max 30 per type)."""
+    data = request.get_json() or {}
+    kind  = data.get("kind")   # patterns | thresholds | resilience | backslide
+    entry = data.get("entry")
+    if not kind or not entry:
+        return jsonify({"ok": False, "error": "Missing kind or entry"}), 400
+    try:
+        history = load_history()
+        if kind not in history:
+            history[kind] = []
+        entry["savedAt"] = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        history[kind].append(entry)
+        history[kind] = history[kind][-30:]  # keep last 30
+        save_history(history)
+        return jsonify({"ok": True, "count": len(history[kind])})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/history/<kind>", methods=["GET"])
+def history_get(kind):
+    """Get history for a given analysis type."""
+    history = load_history()
+    return jsonify(history.get(kind, []))
+
+
+# ── BACKGROUND SCHEDULER ─────────────────────────────────────────────────────
+
+_scheduler_thread = None
+_scheduler_stop   = threading.Event()
+_scheduler_status = {"running": False, "interval": 0, "lastRun": None, "nextRun": None}
+
+
+def _scheduler_worker(interval_hours, settings):
+    """Background thread: collect every interval_hours using saved settings."""
+    while not _scheduler_stop.is_set():
+        next_run = time.time() + interval_hours * 3600
+        _scheduler_status["nextRun"] = datetime.fromtimestamp(
+            next_run, tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+        # Wait until next run or stop signal
+        while time.time() < next_run and not _scheduler_stop.is_set():
+            _scheduler_stop.wait(60)  # check every minute
+
+        if _scheduler_stop.is_set():
+            break
+
+        # Run collection using saved settings
+        try:
+            saved = load_settings()
+            kws    = saved.get("keywords", [])
+            topics = saved.get("topics",   [])
+            source = saved.get("ingestSource", "ddg")
+            days   = int(saved.get("lbDays", 1))
+
+            from_date = (datetime.now(timezone.utc) -
+                         __import__("datetime").timedelta(days=days)
+                         ).strftime("%Y-%m-%d")
+
+            # POST to our own /collect endpoint
+            import urllib.request, json as json_mod
+            payload = json_mod.dumps({
+                "keywords":  kws[:20],
+                "topicMap":  {t["id"]: t["keywords"] for t in topics if isinstance(t, dict)},
+                "fromDate":  from_date,
+                "domains":   [],
+                "source":    source
+            }).encode()
+
+            req = urllib.request.Request(
+                "http://localhost:5000/collect",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST"
+            )
+            urllib.request.urlopen(req, timeout=600)
+            _scheduler_status["lastRun"] = datetime.now(
+                timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        except Exception:
+            pass  # scheduler keeps running even if one collection fails
+
+
+@app.route("/scheduler", methods=["GET"])
+def scheduler_get():
+    return jsonify(_scheduler_status)
+
+
+@app.route("/scheduler/start", methods=["POST"])
+def scheduler_start():
+    global _scheduler_thread, _scheduler_stop
+    data = request.get_json() or {}
+    interval = float(data.get("intervalHours", 24))
+    if interval < 1:
+        return jsonify({"ok": False, "error": "Minimum interval is 1 hour"}), 400
+
+    # Stop existing scheduler if running
+    if _scheduler_thread and _scheduler_thread.is_alive():
+        _scheduler_stop.set()
+        _scheduler_thread.join(timeout=5)
+
+    _scheduler_stop = threading.Event()
+    settings = load_settings()
+    _scheduler_thread = threading.Thread(
+        target=_scheduler_worker,
+        args=(interval, settings),
+        daemon=True
+    )
+    _scheduler_thread.start()
+    _scheduler_status.update({"running": True, "interval": interval})
+
+    # Persist scheduler config in settings
+    settings["schedulerInterval"] = interval
+    save_settings(settings)
+    return jsonify({"ok": True, "intervalHours": interval})
+
+
+@app.route("/scheduler/stop", methods=["POST"])
+def scheduler_stop():
+    global _scheduler_thread
+    _scheduler_stop.set()
+    _scheduler_status.update({"running": False, "nextRun": None})
+    settings = load_settings()
+    settings.pop("schedulerInterval", None)
+    save_settings(settings)
+    return jsonify({"ok": True})
+
+
+
 @app.route("/events", methods=["GET", "POST"])
 def events():
     if request.method == "POST":
@@ -1061,7 +1342,12 @@ def collect():
     source    = data.get("source", "ddg")   # "ddg" | "gdelt" | "both"
 
     articles  = []
-    seen_urls = set()
+    seen_urls  = set(a.get("url","") for a in load_articles())
+    seen_titles = set()
+    # Also load existing title fingerprints for similarity dedup
+    for a in load_articles():
+        t = a.get("title","").lower().strip()
+        if t: seen_titles.add(t[:60])  # first 60 chars as fingerprint
     timelimit = ddg_timelimit(from_date)
 
     try:
@@ -1086,7 +1372,10 @@ def collect():
                                 url = r.get("url", "")
                                 if not url or url in seen_urls:
                                     continue
+                                title_fp=(r.get("title","")or"").lower().strip()[:60]
+                                if title_fp and title_fp in seen_titles: continue
                                 seen_urls.add(url)
+                                if title_fp: seen_titles.add(title_fp)
                                 date_str = parse_date(r.get("date", ""))
                                 if from_date and date_str and date_str < from_date:
                                     continue
@@ -1123,7 +1412,10 @@ def collect():
                             url = r["url"]
                             if not url or url in seen_urls:
                                 continue
+                            title_fp=(r.get("title","")or"").lower().strip()[:60]
+                            if title_fp and title_fp in seen_titles: continue
                             seen_urls.add(url)
+                            if title_fp: seen_titles.add(title_fp)
                             if from_date and r["date"] and r["date"] < from_date:
                                 continue
                             articles.append({
@@ -1193,7 +1485,10 @@ def collect_historical():
                     url = r["url"]
                     if not url or url in seen_urls:
                         continue
+                    title_fp=(r.get("title","")or"").lower().strip()[:60]
+                    if title_fp and title_fp in seen_titles: continue
                     seen_urls.add(url)
+                    if title_fp: seen_titles.add(title_fp)
                     articles.append({
                         "id":           "gdelt-h-" + str(abs(hash(url)))[-8:],
                         "title":        r["title"],
@@ -1255,7 +1550,10 @@ def collect_journals():
                     url = r.get("url", "")
                     if not url or url in seen_urls:
                         continue
+                    title_fp=(r.get("title","")or"").lower().strip()[:60]
+                    if title_fp and title_fp in seen_titles: continue
                     seen_urls.add(url)
+                    if title_fp: seen_titles.add(title_fp)
                     got_new = True
                     date_str = parse_date(r.get("date", ""))
                     if from_date and date_str and date_str < from_date:
