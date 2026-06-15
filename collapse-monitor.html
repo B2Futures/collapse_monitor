@@ -1575,6 +1575,8 @@ function App() {
   var _srcMsg      = useState('');        var srcMsg = _srcMsg[0], setSrcMsg = _srcMsg[1];
   var _srcTab      = useState('global');   var srcTab = _srcTab[0], setSrcTab = _srcTab[1];
   var _thresholds  = useState({});        var thresholds = _thresholds[0], setThresholds = _thresholds[1];
+  var _fredData      = useState(null);     var fredData = _fredData[0],       setFredData      = _fredData[1];
+  var _fredLoading   = useState(false);    var fredLoading = _fredLoading[0], setFredLoading   = _fredLoading[1];
   var _threshRefreshing = useState(false);var threshRefreshing = _threshRefreshing[0], setThreshRefreshing = _threshRefreshing[1];
   var _localMon    = useState({});        var localMon = _localMon[0], setLocalMon = _localMon[1];
   var _localRefreshing = useState(false); var localRefreshing = _localRefreshing[0], setLocalRefreshing = _localRefreshing[1];
@@ -1715,6 +1717,13 @@ function App() {
 
   function loadSrv() {
     fetchModels();
+    // Load FRED economic data (cached 24h)
+    setFredLoading(true);
+    fetch(srvUrl+'/fred-data')
+      .then(function(r){return r.json();})
+      .then(function(d){if(d&&d.indicators) setFredData(d);})
+      .catch(function(){})
+      .finally(function(){setFredLoading(false);});
     fetch(srvUrl+'/load')
       .then(function(r){return r.json();})
       .then(function(d){
@@ -3342,6 +3351,15 @@ function App() {
 
   // ---- LAYOUT ----
 
+  function refreshFred() {
+    setFredLoading(true);
+    fetch(srvUrl+'/fred-refresh', {method:'POST'})
+      .then(function(r){return r.json();})
+      .then(function(d){if(d&&d.indicators) setFredData(d);})
+      .catch(function(e){setErr('FRED refresh failed: '+e.message);})
+      .finally(function(){setFredLoading(false);});
+  }
+
   function vThresholds() {
     var now=new Date();
     var todayStr=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
@@ -3403,6 +3421,55 @@ function App() {
         thresholds.updatedAt&&h('span',{style:{fontFamily:'var(--m)',fontSize:'11px',color:'var(--muted)'}},'Last updated: '+thresholds.updatedAt),
         h('span',{style:{fontSize:'12px',color:'var(--dim)'}},'Uses LM Studio + your collected articles')),
       err&&h('div',{className:'alert alert-err'},err),
+
+      // ── FRED Economic Indicators ────────────────────────────────────
+      h('div',{className:'card mb12'},
+        h('div',{style:{display:'flex',alignItems:'center',gap:'10px',marginBottom:'10px',flexWrap:'wrap'}},
+          h('div',{style:{fontFamily:'var(--m)',fontSize:'11px',color:'var(--cyan)',letterSpacing:'1px',fontWeight:700}},'ECONOMIC INDICATORS'),
+          h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--muted)'}},'FRED · auto-refreshed every 24h'),
+          fredData&&h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--dim)',marginLeft:'auto'}},fredData.updatedAt),
+          h('button',{className:'btn btn-sm',disabled:fredLoading,onClick:refreshFred,
+            style:{fontSize:'10px',padding:'2px 8px',marginLeft:'4px'}},
+            fredLoading?h('span',null,h('span',{className:'spin'},'@ '),'…'):'↻')),
+        fredLoading&&!fredData
+          ? h('div',{style:{textAlign:'center',padding:'16px',color:'var(--muted)',fontFamily:'var(--m)',fontSize:'12px'}},'Fetching data from FRED...')
+          : fredData
+            ? h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:'10px'}},
+                (fredData.indicators||[]).map(function(ind){
+                  var sc = SIGCOL[ind.signal]||'#546e7a';
+                  var SIGCB = {critical:'rgba(255,45,74,.1)',elevated:'rgba(255,119,51,.08)',moderate:'rgba(255,208,0,.06)',low:'rgba(0,232,122,.06)'};
+                  var spark = ind.sparkline||[];
+                  var vals  = spark.map(function(p){return p.value;});
+                  var mn=Math.min.apply(null,vals), mx=Math.max.apply(null,vals);
+                  var sp = vals.length>1 ? vals.map(function(v,i){
+                    var x=Math.round((i/(vals.length-1))*76);
+                    var y=Math.round(18-((v-mn)/(mx-mn||1))*16);
+                    return (i===0?'M':'L')+x+','+y;
+                  }).join(' ') : '';
+                  return h('div',{key:ind.id,style:{
+                      padding:'10px 12px',borderRadius:'4px',
+                      background:SIGCB[ind.signal]||'var(--s2)',
+                      border:'1px solid '+(ind.signal==='low'?'var(--border)':sc+'50')}},
+                    h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'4px'}},
+                      h('div',{style:{fontSize:'10px',color:'var(--muted)',lineHeight:'1.3',flex:1}},ind.label),
+                      h('span',{style:{fontFamily:'var(--m)',fontSize:'8px',padding:'1px 4px',
+                        borderRadius:'2px',background:sc+'25',color:sc,whiteSpace:'nowrap',marginLeft:'4px'}},
+                        (ind.signal||'').toUpperCase())),
+                    h('div',{style:{display:'flex',alignItems:'baseline',gap:'3px',marginBottom:'4px'}},
+                      h('span',{style:{fontFamily:'var(--m)',fontSize:'18px',fontWeight:700,color:sc}},
+                        ind.current!==null&&ind.current!==undefined?Number(ind.current).toLocaleString():'—'),
+                      h('span',{style:{fontFamily:'var(--m)',fontSize:'10px',color:'var(--dim)'}},ind.unit),
+                      ind.zscore!=null&&h('span',{style:{
+                        fontFamily:'var(--m)',fontSize:'10px',marginLeft:'4px',
+                        color:Math.abs(ind.zscore)>1.5?sc:'var(--dim)'}},
+                        (ind.zscore>0?'+':'')+ind.zscore+'σ')),
+                    sp&&h('svg',{viewBox:'0 0 76 18',style:{width:'100%',height:'20px'}},
+                      h('path',{d:sp,fill:'none',stroke:sc,strokeWidth:'1.5',strokeLinecap:'round',strokeLinejoin:'round'})),
+                    ind.date&&h('div',{style:{fontFamily:'var(--m)',fontSize:'9px',color:'var(--dim)',marginTop:'3px'}},'as of '+ind.date));
+                }))
+            : h('div',{style:{fontFamily:'var(--m)',fontSize:'11px',color:'var(--dim)',padding:'8px 0'}},
+                'No economic data — restart server to fetch from FRED')),
+
       threshRefreshing&&h('div',{className:'card',style:{textAlign:'center',padding:'30px'}},
         h('div',{className:'spin',style:{fontSize:'20px',color:'var(--cyan)',display:'block',marginBottom:'8px'}},'@'),
         h('div',{style:{fontSize:'12px',color:'var(--muted)'}},'Assessing 12 planetary thresholds...')),

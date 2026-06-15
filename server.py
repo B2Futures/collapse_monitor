@@ -4,7 +4,7 @@
 
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
-import json, os, re, time, urllib.request, urllib.parse, urllib.error
+import json, os, re, time, urllib.request, urllib.parse, urllib.error, csv, io, statistics
 from datetime import datetime, timezone
 from ddgs import DDGS
 
@@ -23,6 +23,8 @@ THRESHOLDS_FILE     = os.path.join(DATA_DIR, "thresholds.json")
 LOCAL_MONITOR_FILE  = os.path.join(DATA_DIR, "local_monitor.json")
 RESILIENCE_FILE     = os.path.join(DATA_DIR, "resilience.json")
 FASCISM_FILE        = os.path.join(DATA_DIR, "fascism.json")
+EVENTS_FILE         = os.path.join(DATA_DIR, "events.json")
+FRED_FILE           = os.path.join(DATA_DIR, "fred_cache.json")
 LOCAL_BRIEFING_FILE  = os.path.join(DATA_DIR, "local_briefing.json")
 LOCAL_ARTICLES_FILE  = os.path.join(DATA_DIR, "local_articles.json")
 
@@ -511,6 +513,146 @@ def retag_articles():
 
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
+
+
+
+FRED_INDICATORS = [
+    {"id": "UNRATE",    "label": "Unemployment Rate",        "unit": "%",   "invert": True},
+    {"id": "CPIAUCSL",  "label": "CPI Inflation",            "unit": "idx", "invert": True},
+    {"id": "FEDFUNDS",  "label": "Federal Funds Rate",       "unit": "%",   "invert": False},
+    {"id": "T10Y2Y",    "label": "Yield Curve (10y-2y)",     "unit": "%",   "invert": False},
+    {"id": "ICSA",      "label": "Weekly Jobless Claims",    "unit": "k",   "invert": True},
+    {"id": "DCOILWTICO","label": "WTI Crude Oil",            "unit": "$/b", "invert": False},
+    {"id": "DTWEXBGS",  "label": "US Dollar Index",          "unit": "idx", "invert": False},
+    {"id": "UMCSENT",   "label": "Consumer Sentiment",       "unit": "idx", "invert": False},
+]
+
+def fetch_fred_series(series_id, observation_start="2023-01-01"):
+    """Fetch FRED CSV data — no API key required."""
+    url = (f"https://fred.stlouisfed.org/graph/fredgraph.csv"
+           f"?id={series_id}&vintage_date=&cosd={observation_start}")
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "CollapseMonitor/1.0"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            raw = resp.read().decode("utf-8")
+        reader = csv.DictReader(io.StringIO(raw))
+        rows = [(r["DATE"], float(r[series_id]))
+                for r in reader
+                if r.get(series_id) and r[series_id] not in (".", "")]
+        return rows
+    except Exception as e:
+        return []
+
+def compute_zscore(rows):
+    """Compute z-score of the most recent value vs. trailing window."""
+    if len(rows) < 10:
+        return None, None, None
+    values = [v for _, v in rows]
+    recent  = values[-1]
+    # Use up to 104 weeks (~2 years) of history
+    window  = values[max(0, len(values)-104):-1]
+    if len(window) < 5:
+        return recent, None, None
+    mu  = statistics.mean(window)
+    try:
+        sd  = statistics.stdev(window)
+    except Exception:
+        sd = 0
+    z   = (recent - mu) / sd if sd > 0 else 0.0
+    return recent, round(z, 2), round(mu, 3)
+
+def zscore_to_signal(z, invert=False):
+    """Convert z-score to signal level. invert=True means high value = bad."""
+    if z is None:
+        return "unknown"
+    if invert:
+        if z > 2.5:  return "critical"
+        if z > 1.5:  return "elevated"
+        if z > 0.5:  return "moderate"
+        return "low"
+    else:
+        if z < -2.5: return "critical"
+        if z < -1.5: return "elevated"
+        if z < -0.5: return "moderate"
+        return "low"
+
+
+@app.route("/fred-data", methods=["GET"])
+def fred_data():
+    """Return cached FRED economic indicators, refreshing if >24h old."""
+    try:
+        # Check cache
+        if os.path.exists(FRED_FILE):
+            with open(FRED_FILE, "r", encoding="utf-8") as f:
+                cached = json.load(f)
+            age_hours = (time.time() - cached.get("fetchedAt", 0)) / 3600
+            if age_hours < 24:
+                return jsonify(cached)
+
+        # Fetch fresh data
+        results = []
+        for ind in FRED_INDICATORS:
+            rows = fetch_fred_series(ind["id"])
+            if not rows:
+                continue
+            current, z, mean_val = compute_zscore(rows)
+            signal = zscore_to_signal(z, ind.get("invert", False))
+            # Last 12 data points for sparkline
+            sparkline = [{"date": d, "value": v} for d, v in rows[-12:]]
+            results.append({
+                "id":       ind["id"],
+                "label":    ind["label"],
+                "unit":     ind["unit"],
+                "current":  round(current, 3) if current is not None else None,
+                "mean":     mean_val,
+                "zscore":   z,
+                "signal":   signal,
+                "invert":   ind.get("invert", False),
+                "date":     rows[-1][0] if rows else None,
+                "sparkline": sparkline,
+            })
+
+        payload = {
+            "indicators": results,
+            "fetchedAt":  time.time(),
+            "updatedAt":  datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+        }
+        with open(FRED_FILE, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2)
+        return jsonify(payload)
+
+    except Exception as e:
+        return jsonify({"error": str(e), "indicators": []}), 500
+
+
+@app.route("/fred-refresh", methods=["POST"])
+def fred_refresh():
+    """Force a fresh FRED fetch by deleting the cache."""
+    try:
+        if os.path.exists(FRED_FILE):
+            os.remove(FRED_FILE)
+        return fred_data()
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/events", methods=["GET", "POST"])
+def events():
+    if request.method == "POST":
+        data = request.get_json() or {}
+        try:
+            with open(EVENTS_FILE, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            return jsonify({"ok": True})
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e)}), 500
+    else:
+        try:
+            if os.path.exists(EVENTS_FILE):
+                with open(EVENTS_FILE, "r", encoding="utf-8") as f:
+                    return jsonify(json.load(f))
+        except Exception:
+            pass
+        return jsonify([])
 
 
 @app.route("/fascism", methods=["GET", "POST"])
